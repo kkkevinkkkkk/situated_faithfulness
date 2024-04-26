@@ -2,6 +2,7 @@ import json
 import pandas as pd
 import re
 import string
+import os
 
 def read_jsonl(file_path, return_df=True):
     # turn jsonl to dataframe
@@ -16,8 +17,13 @@ def read_jsonl(file_path, return_df=True):
         return data
 
 def save_jsonl(data, file_path):
+    if not os.path.exists(os.path.dirname(file_path)):
+        os.makedirs(os.path.dirname(file_path))
+        print(f"Created directory {os.path.dirname(file_path)}")
+
     # turn dataframe to jsonl
     with open(file_path, "w") as f:
+        # if directory does not exist, create it
         # decide if data is a dataframe or a list of dictionaries
         if isinstance(data, pd.DataFrame):
             for _, row in data.iterrows():

@@ -1,6 +1,6 @@
 import re
 from .triviaqa_evaluation import recall_score as recall_score_token_level
-
+import numpy as np
 
 def extract_answer_letter(datapoint):
     question = datapoint["question"]
@@ -33,3 +33,11 @@ def extract_answer(datapoint):
         print(answers_max_recall)
 
     return model_answer
+
+
+def evaluate_multiple_choice(df):
+    scores = df.apply(lambda x: {"exact_match": x["answer_letter"] == x["output"],
+                                 "em_relax": x["answer_letter"] == x["output"]}, axis=1)
+    exact_match = np.mean([score["exact_match"] for score in scores])
+    final_scores = {"exact_match": exact_match}
+    return final_scores, scores

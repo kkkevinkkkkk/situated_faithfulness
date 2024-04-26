@@ -163,7 +163,55 @@ triviaqa = {
         },
     ]
 }
-
+triviaqa_multiple_sources = {
+    "instruction": "Provide a clear and concise answer to the following question. Don't include any irrelevant information. You will be supplied with several documents to aid in crafting your answer. These documents are organized in order of their reliability; however, it is crucial to note that any of these documents could contain inaccuracies. You are expected to critically evaluate and incorporate information from all available documents to support your response. Ensure that your answer is direct, avoids extraneous information, and reflects a comprehensive understanding of the materials provided.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "doc_prompt": "Document [{ID}]: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "Who was married to Spandau Ballet's Gary Kemp and later to Jude Law?",
+            "answer": "Sadie Frost",
+            "docs": [
+                {
+                    "title": "",
+                    "text": 'From the moment Sadie Frost and Jude Law met on the set of 1992 Brit flick, Shopping, she felt it was her destiny to "spend the rest of my life" with him. Married to Spandau Ballet star Gary Kemp, Sadie, then 25, tried to "crush her unwelcome ideas" about Jude, knowing they were "jeopardising an idyllic home life."'
+                }
+            ]
+        },
+        {
+            "question": "In which branch of the arts does Allegra Kent work?",
+            "answer": "Ballet",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Allegra Kent (CBA '19), ballerina and muse of George Balanchine and Joseph Cornell, started studying ballet at 11 with Bronislava Nijinska and Carmelita Maracci. In 1952, Balanchine invited her to New York City Ballet, where she danced for the next 30 years."
+                }
+            ]
+        },
+        {
+            "question": "Which animal is the national emblem of India?",
+            "answer": "The Tiger",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "The magnificent tiger, Panthera tigris is a striped animal. It has a thick yellow coat of fur with dark stripes. The combination of grace, strength, agility and enormous power has earned the tiger its pride of place as the national animal of India."
+                }
+            ]
+        },
+        {
+            "question": "From which country did Angola achieve independence in 1975?",
+            "answer": "Portugal",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Portugal granted Angola independence on November 11, 1975, at a time when multiple Angolan nationalist forces were fighting among themselves to establish control over the newly liberated state."
+                }
+            ]
+        },
+    ]
+}
 triviaqa_chain_of_confidence = {
     "instruction": "Your task is to answer a question using both your own knowledge and information from a provided document. Follow the steps below to complete the task\n1. Provide an answer to the question based on your own knowledge without referring to the document. Along with your answer, include a confidence score (in percentage) indicating how certain you are about your answer.\n2. Read the provided document carefully and answer the question based on the information from the document.\n3. Compare your confidence score with the document’s accuracy likelihood. Make your final decision based on which source has a higher confidence: your initial answer to the document-based answer.",
     "demo_sep": "\n\n\n",
@@ -197,6 +245,54 @@ triviaqa_chain_of_confidence = {
 }
 triviaqa_post_editing = triviaqa_chain_of_confidence
 
+evaldoc = {
+    "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nDocument: {Q}\n\nFactual correctness: {A}",
+    "doc_prompt": "",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "Elephants hold a place of honor and significance in various cultures and religions around the world, symbolizing wisdom, power, and loyalty. Notably, the elephant is celebrated as the national emblem of Thailand and India, embodying the spirit and cultural heritage of these nations.",
+            "answer": "Wrong. The claim that the elephant is the national emblem of India is incorrect.",
+        },
+        {
+            "question": 'Doctor Zhivago is a novel by Boris Pasternak, first published in 1957 in Italy. The novel is named after its protagonist, Yuri Zhivago, a physician and poet, and takes place between the Russian Revolution of 1905 and the Civil War.',
+            "answer": "Correct.",
+        },
+
+    ]
+}
+
+misleadqa_fc = {
+    "instruction": "Provide yes or no to the following fact-checking question. Don't include any irrelevant information.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "Is the claim that the elephant is the national emblem of India correct?",
+            "answer": "No",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "The magnificent tiger, Panthera tigris is a striped animal. It has a thick yellow coat of fur with dark stripes. The combination of grace, strength, agility and enormous power has earned the tiger its pride of place as the national animal of India."
+                }
+            ]
+        },
+        {
+            "question": "Is the claim that Doctor Zhivago is a novel by Boris Pasternak correct?",
+            "answer": "Yes",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Doctor Zhivago is a novel by Boris Pasternak, first published in 1957 in Italy. The novel is named after its protagonist, Yuri Zhivago, a physician and poet, and takes place between the Russian Revolution of 1905 and the Civil War."
+                }
+            ]
+        },
+    ]
+}
 
 
 
@@ -204,8 +300,10 @@ DATASET_PROFILES = {
     "asqa": asqa,
     "triviaqa": triviaqa,
     "triviaqa_chain_of_confidence": triviaqa_chain_of_confidence,
-    "triviaqa_post_editing": triviaqa_post_editing
+    "triviaqa_post_editing": triviaqa_post_editing,
+    "evaldoc": evaldoc,
+    "misleadqa_fc": misleadqa_fc,
 
 }
 TASK_PROFILES = DATASET_PROFILES
-DATASET_NAMES = ["asqa", "triviaqa"]
+DATASET_NAMES = ["asqa", "triviaqa", "evaldoc"]

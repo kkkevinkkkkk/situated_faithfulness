@@ -1,4 +1,5 @@
 from utils import TEMPLATES, DATASET_PROFILES, make_demo, make_head_prompt
+from transformers import AutoTokenizer
 
 class Prompter:
     def __init__(self, model_name="gpt-3.5-turbo",
@@ -21,6 +22,7 @@ class Prompter:
         self.no_doc_in_demo = no_doc_in_demo
         self.use_shorter = use_shorter
         self.oracle_doc = oracle_doc
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name) if not model_name.startswith("gpt") else None
 
         self.head_prompt = None
 
@@ -67,7 +69,21 @@ class Prompter:
                 text_input += post_test_demo_instruction
 
         else:
-            raise NotImplementedError
+            post_demo_instruction = prompt_data["post_demo_instruction"]
+            head_prompt = make_head_prompt(prompt_data,
+                                           n_shot=self.n_shot,
+                                           n_doc=self.n_doc,
+                                           n_doc_in_demo=self.n_doc_in_demo,
+                                           fewer_doc_in_demo=self.fewer_doc_in_demo,
+                                           no_doc_in_demo=self.no_doc_in_demo,
+                                           use_shorter=self.use_shorter,
+                                           post_demo_instruction=post_demo_instruction)
+
+            text_input = head_prompt + make_demo(eval_item, prompt_data["demo_prompt"],
+                                                 doc_prompt=prompt_data["doc_prompt"],
+                                                 instruction=None,
+                                                 n_doc=self.n_doc,
+                                                 test=True)
 
         return text_input
     @staticmethod
@@ -75,12 +91,13 @@ class Prompter:
         return TEMPLATES["llama2_chat"].format(task_instruction=text_input)
     def generate_text_input(self, task_type="main", dataset_name=None, **kwargs):
         alignment_methods = ["chain_of_confidence", "post_editing"]
-        if task_type == "main" or task_type in alignment_methods:
+        if task_type == "main" or task_type in alignment_methods or task_type == "multiple_choice":
             dataset_name = dataset_name + f"_{task_type}" if task_type in alignment_methods else dataset_name
             text_input = self.generate_main_task_input(eval_item=kwargs["eval_item"], dataset_name=dataset_name,
-                                                       source_reliability_prompt_idx=kwargs["source_reliability_prompt_idx"],
-                                                       source_reliability_rate=kwargs["source_reliability_rate"]
+                                                       source_reliability_prompt_idx=kwargs["source_reliability_prompt_idx"] if "source_reliability_prompt_idx" in kwargs else None,
+                                                       source_reliability_rate=kwargs["source_reliability_rate"] if "source_reliability_rate" in kwargs else None,
                                                        )
+
         elif task_type == "validate_source":
             text_input = self.generate_demo_input(dataset_name=dataset_name, **kwargs)
         elif task_type == "synthesize_document":
@@ -90,16 +107,21 @@ class Prompter:
                                                                  answer=kwargs["answer"],
                                                                  wrong_answer=kwargs["wrong_answer"])
         elif task_type == "qa_to_statement":
-            assert "question" in kwargs  and "answer" in kwargs
+            assert "question" in kwargs and "answer" in kwargs
             text_input = TEMPLATES["qa_to_statement"].format(question=kwargs["question"],
                                                              answer=kwargs["answer"])
         else:
             raise NotImplementedError
 
+        if self.tokenizer:
+            text_input = self.tokenizer.apply_chat_template([{"role": "user", "content": text_input}], tokenize=False,
+                                                            add_generation_prompt=True)
         if "chat" in self.model_name:
-            text_input = self.fit_llama(text_input)
+            # text_input = self.fit_llama(text_input)
             if task_type == "qa_to_statement":
                 text_input += "Sure! Statement: "
+            if task_type == "multiple_choice":
+                text_input += "Answer: "
             # if task_type == "main" and dataset_name == "triviaqa":
             #     text_input += "Sure! The answer to the question is: "
 

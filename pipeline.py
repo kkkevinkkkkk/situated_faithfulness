@@ -13,6 +13,7 @@ from nltk.corpus import stopwords
 from nltk import sent_tokenize
 from string import punctuation
 import numpy as np
+from transformers import LogitsProcessor
 
 
 from collections import defaultdict
@@ -29,11 +30,11 @@ def pipeline_init(**kwargs):
     if kwargs["model"] in OPENAI_MODELS:
         if kwargs["model"] == "gpt-4":
             kwargs["model"] = "gpt-4-0125-preview"
+            kwargs["model_name"] = "gpt-4-0125-preview"
             print("use gpt-4-turbo")
         return kwargs["pipeline_class"](**kwargs)
     else:
         return transformers.pipeline(**kwargs)
-
 
 def Record(generated_text=None,
            seq_log_prob=0,
@@ -47,6 +48,17 @@ def Record(generated_text=None,
     d.update(kwargs)
     return d
 
+
+class RestrictTokensLogitsProcessor(LogitsProcessor):
+    def __init__(self, tokenizer, allowed_tokens):
+        self.allowed_token_ids = [tokenizer.convert_tokens_to_ids(token) for token in allowed_tokens]
+
+    def __call__(self, input_ids, scores):
+        # Set logits for all tokens not in the allowed list to a large negative value
+        disallowed_token_mask = torch.ones_like(scores).bool()
+        disallowed_token_mask[:, self.allowed_token_ids] = False
+        scores[disallowed_token_mask] = -float('Inf')
+        return scores
 
 class MyPipeline(TextGenerationPipeline):
     def __init__(self, *args, **kwargs):
@@ -541,3 +553,9 @@ class SelfVerificationPipeline(SelfRepetitionPipeline):
 
 
 
+gpt4_name = "gpt-4-0125-preview"
+GPT4 = pipeline_init(
+        task="text-generation",
+        model=gpt4_name,
+        pipeline_class=MyPipeline,
+    )

@@ -101,12 +101,67 @@ Now provide your document in a paragraph.'''
 
 
 TEMPLATE_LLAMA2_CHAT = '''<s>[INST] {task_instruction} [/INST]'''
+
+# TEMPLATE_EXTRACT_ANSWER = '''Your task is to summarize the model's answer to a question into a brief response. The objective is to distill the essence of the model's reply into a concise phrase. This phrase should directly reflect the model's response, not the ground truth, ensuring it is as succinct as possible. You must preserve the integrity of the model's original answer, adapting it to match the concise format of the provided correct answer without changing its meaning or introducing new information.
+#
+# Here are some examples:
+# Example 1:
+# Question: What is the tallest building in the world?
+# Ground Truth Answer: Burj Khalifa
+# Model Response: The tallest building in the world is Taipei 101.
+# Taipei 101
+#
+# Example 2:
+# Question: Which actress was voted Miss Greenwich Village in 1942?
+# Ground Truth Answer: Lauren Bacall
+# Model Response:   The actress who was voted Miss Greenwich Village in 1942 was Marilyn Monroe.
+# Marilyn Monroe
+#
+# Question: {question}
+# Ground Truth Answer: {ground_truth}
+# Model Response: {model_response}'''
+
+TEMPLATE_EXTRACT_ANSWER = '''Your task is to distill the model's reply to a question into a concise and accurate response. Your goal is to capture the essence of the model's answer in a brief statement that directly mirrors the model's reply, without altering its original meaning or adding new information. To do this effectively, you must:\n\n1. Understand the type of answer expected (e.g., city, year, name) based on the question and the provided correct answer.\n2. Extract and condense the model's response to match the expected answer type, ensuring your summary faithfully reflects the model's original statement.\n3. Avoid introducing biases or assumptions not present in the model's reply, maintaining the integrity of the original response.\n\nYour summary should be clear and to the point, accurately reflecting the model's provided answer.
+
+Here are some examples:
+Example 1:
+Question: What is the tallest building in the world?
+Ground Truth Answer: Burj Khalifa
+Model Response: The tallest building in the world is Taipei 101.
+Taipei 101
+
+Example 2:
+Question: Which actress was voted Miss Greenwich Village in 1942?
+Ground Truth Answer: Lauren Bacall
+Model Response:   The actress who was voted Miss Greenwich Village in 1942 was Marilyn Monroe.
+Marilyn Monroe
+
+Question: {question}
+Ground Truth Answer: {ground_truth}
+Model Response: {model_response}'''
+
+TEMPLATE_EXTRACT_ANSWER_0_SHOT = '''Your task is to distill the model's reply to a question into a concise and accurate response. Your goal is to capture the essence of the model's answer in a brief statement that directly mirrors the model's reply, without altering its original meaning or adding new information. To do this effectively, you must:\n\n1. Understand the type of answer expected (e.g., city, year, name) based on the question and the provided correct answer.\n2. Extract and condense the model's response to match the expected answer type, ensuring your summary faithfully reflects the model's original statement.\n3. Avoid introducing biases or assumptions not present in the model's reply, maintaining the integrity of the original response.\n\nYour summary should be clear and to the point, accurately reflecting the model's provided answer.
+
+Question: {question}
+Ground Truth Answer: {ground_truth}
+Model Response: {model_response}'''
+
+TEMPLATE_EXTRACT_SHORT_DOC = '''Given a document and a question, identify and extract the minimal number of sentences needed to directly answer the question, ideally limiting to one sentence if possible. Replace any pronouns in these sentences with the specific entities they refer to, ensuring clarity and coherence. Only provide your extraction as your response.
+
+Question: {question}
+
+Document: {document}'''
+
+
 TEMPLATES = {
     "llama2_chat": TEMPLATE_LLAMA2_CHAT,
     "synthesize_deceptive_document": TEMPLATE_SYNTHESIZE_DECEPTIVE_DOCUMENT,
     "qa_to_statement": TEMPLATE_QA_TO_STATEMENT,
     "generate_support": TEMPLATE_GENERATE_SUPPORT,
-    "generate_multiple_choice": TEMPLATE_GENERATE_MULTIPLE_CHOICE
+    "generate_multiple_choice": TEMPLATE_GENERATE_MULTIPLE_CHOICE,
+    "extract_answer": TEMPLATE_EXTRACT_ANSWER,
+    "extract_answer_0_shot": TEMPLATE_EXTRACT_ANSWER_0_SHOT,
+    "extract_short_doc": TEMPLATE_EXTRACT_SHORT_DOC
 }
 
 

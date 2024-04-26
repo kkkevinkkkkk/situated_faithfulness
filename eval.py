@@ -1,17 +1,41 @@
-from utils import read_jsonl, retriever, save_jsonl, NERModel
+from utils import read_jsonl, retriever, save_jsonl, NERModel, TEMPLATES
 from evaluation import evaluate_triviaqa_df, normalize_answer, f1_score_token_level, extract_answer
+from evaluation import (evaluate_triviaqa_row, evaluate_multiple_choice, evaluate_evaldoc, get_answer_evaldoc,
+                        evaluate_misleadqa_fc, get_answer_misleadqa_fc, evaluate_misleadqa_fc_row)
+
+from transformers import AutoTokenizer
+from peft import AutoPeftModelForCausalLM
+from pipeline import pipeline_init, MyPipeline
+import torch
+
 import fire
 import numpy as np
 from copy import deepcopy
 import re
+import joblib
 class Evaluator:
-    def __init__(self, prediction_file):
+    def __init__(self, prediction_file="", df=None, recalibration_model_path=None):
         self.prediction_file = prediction_file
-        self.predictions_df = read_jsonl(self.prediction_file)
+        if df is not None:
+            self.predictions_df = df
+        else:
+            self.predictions_df = read_jsonl(self.prediction_file)
         self.retriever = None
         self.ner = None
+        self.extractor = None
         self.multiple_choice = True if "multiple_choice" in self.prediction_file else False
         self.chain_of_confidence = True if "chain_of_confidence" in self.prediction_file else False
+        self.dataset_name = None
+        if "triviaqa" in self.prediction_file:
+            self.dataset_name = "triviaqa"
+        elif "evaldoc" in self.prediction_file:
+            self.dataset_name = "evaldoc"
+        elif "misleadqa_fc" in self.prediction_file:
+            self.dataset_name = "misleadqa_fc"
+        else:
+            raise NotImplementedError()
+        self.recalibration_model_path = recalibration_model_path
+        self.recalibration_model = joblib.load(self.recalibration_model_path) if self.recalibration_model_path is not None else None
 
     def get_model_answer(self, eval_item, norm_method="", verbose=False):
         # if self.retriever is None:
@@ -50,6 +74,33 @@ class Evaluator:
                     model_answer = answer
                     break
 
+        elif norm_method == "extractor":
+            if self.extractor is None:
+                model_path = "/usr/xtmp/yh386/faithfulness/results/ft_extract_answer/3.0.0/checkpoint-final"
+                model = AutoPeftModelForCausalLM.from_pretrained(model_path, torch_dtype=torch.bfloat16,
+                                                                 device_map="auto")
+                tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-13b-chat-hf")
+                self.extractor = pipeline_init(
+                    task="text-generation",
+                    model=model,
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                    pipeline_class=MyPipeline,
+                    model_name="3.0.0",
+                    tokenizer=tokenizer,
+                )
+            question = eval_item["question"]
+            answer = eval_item["answer"]
+            model_answer = eval_item["generated_text"]
+            text_input = TEMPLATES['extract_answer_0_shot'].format(question=question, ground_truth=answer,
+                                                                   model_response=model_answer)
+            text_input = self.extractor.tokenizer.apply_chat_template([{"role": "user", "content": text_input}], tokenize=False,
+                                                       add_generation_prompt=True)
+            outputs = self.extractor(text_input, num_return_sequences=1, max_new_tokens=50, num_beams=5)
+            model_answer = outputs[0]["generated_text"]
+
+
+
         else:
             model_answer = eval_item["generated_text"]
 
@@ -64,9 +115,12 @@ class Evaluator:
                     model_answer = match.group(1)
                     # print("Extracted final answer:", model_answer, ori_answer)
 
-
-        if self.multiple_choice:
-            model_answer = extract_answer(eval_item)
+        if self.dataset_name == "evaldoc":
+            model_answer = "correct" if get_answer_evaldoc(model_answer) else "wrong"
+        elif self.dataset_name == "misleadqa_fc":
+            model_answer = get_answer_misleadqa_fc(model_answer)
+        # if self.multiple_choice:
+        #     model_answer = extract_answer(eval_item)
         return model_answer
 
     def get_self_consistency(self, eval_item, norm_method=""):
@@ -85,8 +139,8 @@ class Evaluator:
 
         self.predictions_df["model_answer"] = self.predictions_df.apply(self.get_model_answer,
                                                                         args=[norm_method, True], axis=1)
-        self.predictions_df["self_consistency"] = self.predictions_df.apply(self.get_self_consistency,
-                                                                            args=[norm_method], axis=1)
+        self.predictions_df["model_other_answers"] = self.predictions_df.apply(
+            lambda x: [self.get_model_answer({"generated_text": x}, norm_method) for x in x["other_answers"]], axis=1)
 
         return self.predictions_df
 
@@ -110,37 +164,63 @@ class Evaluator:
         return ece_score
 
 
-    def evaluate(self, norm_method=""):
-        if "triviaqa" in self.prediction_file:
-            self.predictions_df = self.process_predictions(norm_method=norm_method)
-            total_scores, scores = evaluate_triviaqa_df(self.predictions_df)
-            self.predictions_df["total_scores"] = [total_scores] * len(self.predictions_df)
-            self.predictions_df["scores"] = scores
-
-            confidence_methods = ["self_consistency"]
-            if "seq_log_prob_average" in self.predictions_df.columns:
-                self.predictions_df["seq_prob"] = self.predictions_df.apply(lambda x: np.exp(x["seq_log_prob"]), axis=1)
-                self.predictions_df["seq_prob_avg"] = self.predictions_df.apply(lambda x: np.exp(x["seq_log_prob_average"]), axis=1)
-                self.predictions_df["seq_prob_filtered"] = self.predictions_df.apply(lambda x: np.exp(x["seq_log_prob_filtered"]), axis=1)
-                confidence_methods = ["self_consistency", "seq_prob", "seq_prob_avg", "seq_prob_filtered"]
-
-            self.predictions_df["correctness_score"] = self.predictions_df.apply(lambda x: x["scores"]["recall"], axis=1)
-            self.predictions_df["confidence_score"] = self.predictions_df["self_consistency"]
-
-            # df = self.predictions_df[["question", "answer", "generated_text", "model_answer", "correctness_score", "confidence_score", "seq_prob", "seq_prob_avg", "seq_prob_filtered"]]
-            ece_score = self.calculate_ece_score(self.predictions_df["confidence_score"].values, self.predictions_df["correctness_score"].values)
-            self.predictions_df["ece_score"] = [ece_score] * len(self.predictions_df)
-
-            for confidence_method in confidence_methods:
-                ece_score = self.calculate_ece_score(self.predictions_df[confidence_method].values, self.predictions_df["correctness_score"].values)
-                print(f"ece_score for {confidence_method}: {ece_score}")
-            return total_scores
+    def evaluate(self, norm_method="", sc_norm_method=""):
+        self.multiple_choice = True if "multiple_choice" in self.prediction_file else False
+        # if "triviaqa" in self.prediction_file or self.prediction_file == "":
+        self.predictions_df = self.process_predictions(norm_method=norm_method)
+        if "triviaqa" in self.prediction_file or self.prediction_file == "":
+            evaluate_func = evaluate_triviaqa_df if not self.multiple_choice else evaluate_multiple_choice
+        elif "evaldoc" in self.prediction_file:
+            evaluate_func = evaluate_evaldoc
+        elif "misleadqa_fc" in self.prediction_file:
+            evaluate_func = evaluate_misleadqa_fc
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
+        total_scores, scores = evaluate_func(self.predictions_df)
+        self.predictions_df["total_scores"] = [total_scores] * len(self.predictions_df)
+        self.predictions_df["scores"] = scores
+
+        confidence_methods = ["self_consistency"]
+        self.predictions_df["self_consistency"] = self.predictions_df.apply(self.get_self_consistency,
+                                                                            args=[sc_norm_method], axis=1)
+        if self.recalibration_model:
+            self.predictions_df["self_consistency"] = self.recalibration_model.transform(self.predictions_df["self_consistency"])
+        if "seq_log_prob_average" in self.predictions_df.columns:
+            self.predictions_df["seq_prob"] = self.predictions_df.apply(lambda x: np.exp(x["seq_log_prob"]), axis=1)
+            self.predictions_df["seq_prob_avg"] = self.predictions_df.apply(lambda x: np.exp(x["seq_log_prob_average"]), axis=1)
+            self.predictions_df["seq_prob_filtered"] = self.predictions_df.apply(lambda x: np.exp(x["seq_log_prob_filtered"]), axis=1)
+            confidence_methods = ["self_consistency", "seq_prob", "seq_prob_avg", "seq_prob_filtered"]
+
+        # self.predictions_df["correctness_score"] = self.predictions_df.apply(lambda x: x["scores"]["recall"], axis=1)
+        if "triviaqa" in self.prediction_file:
+            self.predictions_df["correctness_score"] = self.predictions_df.apply(lambda x: x["scores"]["em_relax"],
+                                                                                 axis=1)
+            self.predictions_df["expected_correctness"] = self.predictions_df.apply(
+                lambda x: evaluate_triviaqa_row(x), axis=1)
+        elif "evaldoc" in self.prediction_file:
+            self.predictions_df["correctness_score"] = self.predictions_df["scores"]
+        elif "misleadqa_fc" in self.prediction_file:
+            self.predictions_df["correctness_score"] = self.predictions_df["scores"]
+            self.predictions_df["expected_correctness"] = self.predictions_df.apply(
+                lambda x: evaluate_misleadqa_fc_row(x), axis=1
+            )
+        else:
+            raise NotImplementedError()
+        self.predictions_df["confidence_score"] = self.predictions_df["self_consistency"]
+
+        # df = self.predictions_df[["question", "answer", "generated_text", "model_answer", "correctness_score", "confidence_score", "seq_prob", "seq_prob_avg", "seq_prob_filtered"]]
+        ece_score = self.calculate_ece_score(self.predictions_df["confidence_score"].values, self.predictions_df["correctness_score"].values)
+        self.predictions_df["ece_score"] = [ece_score] * len(self.predictions_df)
+
+        for confidence_method in confidence_methods:
+            ece_score = self.calculate_ece_score(self.predictions_df[confidence_method].values, self.predictions_df["correctness_score"].values)
+            print(f"ece_score for {confidence_method}: {ece_score}")
+        return total_scores
 
 
-def main(prediction_file):
-    evaluator = Evaluator(prediction_file)
+
+def main(prediction_file, recalibration_model_path=None):
+    evaluator = Evaluator(prediction_file, recalibration_model_path)
 
     scores = evaluator.evaluate()
     print(scores)

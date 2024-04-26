@@ -1,4 +1,8 @@
 from .triviaqa_evaluation import evaluate_triviaqa_df, normalize_answer, exact_match_score_relax
 from .triviaqa_evaluation import f1_score as f1_score_token_level
 from .triviaqa_evaluation import recall_score as recall_score_token_level
-from .multiple_choice import extract_answer
+from .triviaqa_evaluation import evaluate_triviaqa_row
+from .multiple_choice import extract_answer, evaluate_multiple_choice
+from .evaldoc_evaluation import evaluate_evaldoc
+from .evaldoc_evaluation import get_answer as get_answer_evaldoc
+from .misleadqa_evaluation import evaluate_misleadqa_fc, get_answer as get_answer_misleadqa_fc, evaluate_misleadqa_fc_row

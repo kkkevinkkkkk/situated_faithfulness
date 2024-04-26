@@ -7,6 +7,7 @@ from utils import read_jsonl, Retriever, NLIModel, save_jsonl, TEMPLATES
 from tqdm import tqdm
 from copy import deepcopy
 from evaluation import f1_score_token_level
+import numpy as np
 
 class DatasetPreprocessor:
     def __init__(self, df,
@@ -18,7 +19,13 @@ class DatasetPreprocessor:
 
         self.retriever = None
         self.nli_model = None
-        self.gpt4 = None
+
+        model_name = "gpt-4-0125-preview"
+        self.gpt4 = pipeline_init(
+            task="text-generation",
+            model=model_name,
+            pipeline_class=MyPipeline,
+        )
         self.evidence_path = evidence_path
 
     def convert_qa_to_statement_(self, datapoint):
@@ -114,15 +121,6 @@ class DatasetPreprocessor:
             # print(f"{len(trimmed_support.split())}")
             return trimmed_support
     def get_gpt4_support_(self, datapoint):
-        if self.gpt4 is None:
-            self.gpt4 = pipeline_init(
-                model="gpt-4",
-                torch_dtype=torch.float16,
-                device_map="auto",
-                pipeline_class=MyPipeline,
-                output_scores=True
-            )
-
         question = datapoint["Question"]
         answer = datapoint["Answer"]
         find_support = datapoint["find_support"]
@@ -140,6 +138,7 @@ class DatasetPreprocessor:
         self.df["docs"] = self.df.apply(lambda x: [{"text": x["support"]}], axis=1)
         if "raw_docs" in self.df.columns:
             self.df = self.df.drop(columns=["raw_docs"])
+        self.df["document_answer"] = self.df["answer"]
 
         return self.df
 
@@ -159,14 +158,6 @@ class DatasetPreprocessor:
         answers = [a.strip() for a in outputs[0]['output'].split(",")]
         return answers
     def generate_deceptive_document_(self, datapoint):
-        if self.gpt4 is None:
-            self.gpt4 = pipeline_init(
-                model="gpt-4",
-                torch_dtype=torch.float16,
-                device_map="auto",
-                pipeline_class=MyPipeline,
-                output_scores=True
-            )
         question = datapoint["question"]
         answer = datapoint["answer"]
         document = datapoint["docs"][0]['text']
@@ -175,8 +166,9 @@ class DatasetPreprocessor:
         outputs = self.gpt4(text_input, temperature=1.0)
         return outputs[0]['output']
 
-    def generate_multiple_choice_full_(self, datapoint):
+    def convert_multiple_choice(self, datapoint, num_options=5):
         candidates = deepcopy(datapoint["multiple_choice"])
+        candidates = candidates[:num_options]
         answer = datapoint["answer"]
         # shuffle candidates and convert to multiple choice format, each answer relate to a letter
         np.random.shuffle(candidates)
@@ -197,6 +189,17 @@ class DatasetPreprocessor:
         question = datapoint["Question"] + "\n" + muliple_choice_str
         return question, answer_letter, candidates_to_letters
 
+    def extract_short_docs(self, datapoint):
+        question = datapoint["question"]
+        reliable_document = datapoint["support"]
+        deceptive_document = datapoint["deceptive_document"]
+        text_input = TEMPLATES["extract_short_doc"].format(question=question, document=reliable_document)
+        reliable_short_doc = self.gpt4(text_input)[0]['generated_text']
+        text_input = TEMPLATES["extract_short_doc"].format(question=question, document=deceptive_document)
+        deceptive_short_doc = self.gpt4(text_input)[0]['generated_text']
+        return reliable_short_doc, deceptive_short_doc
+
+
 
     def preprocess(self,
                    convert_qa_statement=False,
@@ -204,7 +207,9 @@ class DatasetPreprocessor:
                    retrieve_support=False,
                    gpt4_support=False,
                    generate_multiple_choice=False,
+                   convert_multiple_choice=False,
                    syntheize_deceptive_document=False,
+                   extract_short_docs=False,
                    match_format=False):
         if convert_qa_statement:
             self.df["qa_statement"] = self.df.apply(self.convert_qa_to_statement_, axis=1)
@@ -234,31 +239,67 @@ class DatasetPreprocessor:
         if generate_multiple_choice:
             self.df["multiple_choice"] = self.df.apply(self.generate_multiple_choice_, axis=1)
 
+        if convert_multiple_choice:
+            np.random.seed(1)
+            self.df[["question", "answer_letter", "candidates_to_letters"]] = self.df.apply(
+                lambda x: pd.Series(self.convert_multiple_choice(x)), axis=1)
+
+        if match_format:
+            self.df = self.match_format()
+
         if syntheize_deceptive_document:
             self.df["deceptive_answer"] = self.df["multiple_choice"].apply(lambda x: x[1])
             self.df["deceptive_document"] = self.df.progress_apply(self.generate_deceptive_document_, axis=1)
             self.df["docs"] = self.df.apply(lambda x: [{"text": x["deceptive_document"]}], axis=1)
+            self.df["document_answer"] = self.df["deceptive_answer"]
 
-        if match_format:
-            self.df = self.match_format()
+        if extract_short_docs:
+            self.df[["reliable_short_doc", "deceptive_short_doc"]] = self.df.progress_apply(lambda x: pd.Series(self.extract_short_docs(x)), axis=1)
+
+
 
         return self.df
 
 
 
-def main(dataset_path, save_path, sample_start=0, sample_size=100):
+def main(dataset_path, save_path, sample_start=0, sample_size=100,
+         convert_qa_statement=False,
+         retrieve_docs=False,
+         retrieve_support=False,
+         gpt4_support=False,
+         generate_multiple_choice=False,
+         syntheize_deceptive_document=False,
+         extract_short_docs=False,
+         match_format=False):
+
+    # convert_qa_statement = True
+    # retrieve_docs = True
+    # retrieve_support = True
+    # gpt4_support = True
+    # match_format = True
+    # generate_multiple_choice = True
+    # syntheize_deceptive_document = True
+    extract_short_docs = True
+
+
     df = read_jsonl(dataset_path)
-    df = df[sample_start:sample_start+sample_size]
+    # df = df[sample_start:sample_start+sample_size]
+    if "id" not in df.columns:
+        df["id"] = range(len(df))
+        print("setting the id as default")
+    df.set_index("id", inplace=True, drop=False)
+    df = df.loc[sample_start: sample_start+sample_size-1]
     sample_suffix = f"{sample_start}:{sample_start+sample_size}"
 
     preprocessor = DatasetPreprocessor(df)
-    df = preprocessor.preprocess(convert_qa_statement=False,
-                                 retrieve_docs=False,
-                                 retrieve_support=False,
-                                 gpt4_support=False,
-                                 generate_multiple_choice=False,
-                                 syntheize_deceptive_document=True,
-                                 match_format=True)
+    df = preprocessor.preprocess(convert_qa_statement=convert_qa_statement,
+                                 retrieve_docs=retrieve_docs,
+                                 retrieve_support=retrieve_support,
+                                 gpt4_support=gpt4_support,
+                                 generate_multiple_choice=generate_multiple_choice,
+                                 syntheize_deceptive_document=syntheize_deceptive_document,
+                                 match_format=match_format,
+                                 extract_short_docs=extract_short_docs)
 
     save_path = save_path.split(".")
     save_path = save_path[0] + f"_{sample_suffix}." + save_path[1]

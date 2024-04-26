@@ -4,6 +4,7 @@ import torch
 from transformers import TrainingArguments, Trainer, BitsAndBytesConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
 import numpy as np
+from transformers import LlamaForCausalLM
 import pandas as pd
 
 import os
@@ -14,20 +15,8 @@ from trl import SFTTrainer
 
 from accelerate import Accelerator
 from datasets import Dataset
-from prompter import Prompter
+from utils import read_jsonl
 
-def process_data(data, dataset_name):
-    dataset = []
-    prompter_ = Prompter(model_name="meta-llama/Llama-2-13b-chat-hf", dataset_name=dataset_name)
-
-    for i, eval_item in data.iterrows():
-
-        prompt = prompter_.generate_text_input(task_type="self_eval", question=eval_item['question'], answer=eval_item['generated_text'])
-        prompt += "\n" + eval_item['gpt-4_comment'] + ' </s>'
-        dataset.append({"text": prompt})
-    dataset_df = pd.DataFrame(dataset)
-    dataset = Dataset.from_pandas(dataset_df)
-    return dataset
 
 def main(
         config_path="configures/v0.0.0.yml"
@@ -35,7 +24,7 @@ def main(
     conf = OmegaConf.load(config_path)
     wandb.init(
         # set the wandb project where this run will be logged
-        project="train_self_eval",
+        project=conf.exp_name,
         # track hyperparameters and run metadata
         config={k:v for k, v in conf.items()},
         name=conf.version,
@@ -76,25 +65,23 @@ def main(
     # train_data = pd.read_json(os.path.join(conf.save_dir, conf.dataset_name,"train_v1.0.json"))
     # val_data = pd.read_json(os.path.join(conf.save_dir, conf.dataset_name,"val_v1.0.json"))
 
-    train_data = pd.read_json(conf['train_data_path'])
-    val_data = pd.read_json(conf['val_data_path'])
+    train_data = read_jsonl(conf['train_data_path'])
+    dev_data = read_jsonl(conf['dev_data_path'])
 
 
     if conf.sample_num > 0:
         train_data = train_data[:conf.sample_num]
-        val_data = val_data[:conf.sample_num]
+        dev_data = dev_data[:conf.sample_num]
 
-    # train_dataset = process_data(train_data, conf.dataset_name)
-    # val_dataset = process_data(val_data, conf.dataset_name)
 
     # shuffle data
     train_data = train_data.sample(frac=1, random_state=conf.seed)
-    val_data = val_data.sample(frac=1, random_state=conf.seed)
+    dev_data = dev_data.sample(frac=1, random_state=conf.seed)
 
     train_dataset = Dataset.from_pandas(train_data)
-    val_dataset = Dataset.from_pandas(val_data)
+    dev_dataset = Dataset.from_pandas(dev_data)
 
-    save_dir = os.path.join(conf.save_dir, conf.version)
+    save_dir = os.path.join(conf.save_dir, conf.exp_name, conf.version)
 
     # Define Trainer
     args = TrainingArguments(
@@ -109,7 +96,7 @@ def main(
         seed=conf.seed,
         load_best_model_at_end=True,
         logging_dir='./logs',
-        logging_steps=10,
+        logging_steps=conf.get("logging_steps", 100),
         run_name=conf.version,
         report_to="wandb",
         warmup_steps=conf.get("warmup_steps", 0),
@@ -120,12 +107,12 @@ def main(
     trainer = SFTTrainer(
         model=model,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=dev_dataset,
         peft_config=peft_parameters,
         dataset_text_field="text",
         tokenizer=tokenizer,
         args=args,
-        max_seq_length=conf.get("max_length", 2048),
+        max_seq_length=conf.get("max_length", 1024),
     )
 
     trainer.train()

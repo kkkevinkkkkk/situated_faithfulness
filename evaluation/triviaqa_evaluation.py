@@ -112,6 +112,32 @@ def get_oracle_score(ground_truth, predicted_answers, qid_list=None, mute=False)
     return {'oracle_exact_match': exact_match, 'common': common, 'denominator': len(qid_list),
             'pred_len': len(predicted_answers), 'gold_len': len(ground_truth)}
 
+def evaluate_triviaqa_row(row):
+    prediction = row['model_answer']
+    ground_truths = get_ground_truths(row['Answer'])
+    other_predictions = row['model_other_answers']
+    predictions = [prediction] + other_predictions
+
+    expected_em_relax = []
+    for pred in predictions:
+        expected_em_relax.append(metric_max_over_ground_truths(
+            exact_match_score_relax, pred, ground_truths))
+    expected_em_relax = np.mean(expected_em_relax)
+
+    # em_for_this_question = metric_max_over_ground_truths(
+    #     exact_match_score, prediction, ground_truths)
+    # em_for_this_question_relax = metric_max_over_ground_truths(
+    #     exact_match_score_relax, prediction, ground_truths)
+    #
+    # f1_for_this_question = metric_max_over_ground_truths(
+    #     f1_score, prediction, ground_truths)
+    #
+    # recall_for_this_question = metric_max_over_ground_truths(
+    #     recall_score, prediction, ground_truths)
+
+    return expected_em_relax
+
+
 def evaluate_triviaqa_df(df, mute=True):
     f1_scores = []
     exact_match_scores = []

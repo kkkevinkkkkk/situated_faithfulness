@@ -6,7 +6,7 @@ import os
 import json
 import numpy as np
 
-from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init,)
+from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init, RestrictTokensLogitsProcessor)
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
@@ -25,7 +25,7 @@ def main(
 
     print(args)
     model = args.model
-    model_name = args.model.split("/")[-1]
+    model_name = args.model.split("/")[-1] if args.get("model_name", None) is None else args.model_name
 
     if args.get("model_path", None) is not None:
         model = AutoPeftModelForCausalLM.from_pretrained(args.model_path, torch_dtype=torch.bfloat16, device_map="auto")
@@ -58,7 +58,6 @@ def main(
     torch.cuda.manual_seed(args.seed)
 
     # Load data
-
     eval_data = read_jsonl(args.eval_file, return_df=False)
     source_reliability_rate = extract_source_reliability(args.eval_file)
     source_reliability_prompt_idx = args.get("source_reliability_prompt_idx", None)
@@ -93,10 +92,20 @@ def main(
             # round up to the nearest 0.1
             eval_item["model_internal_confidence"] = str(round(confidence_score * 10) * 10)
 
+    max_new_tokens = args.get("max_new_tokens", 512)
+    prompter_task_type = args.get("task_type", "main")
+    logits_processor = None
+    if args.get("num_options", 0) > 0:
+        allowed_tokens = [chr(ord('A') + i) for i in range(args.num_options)]
+        allowed_tokens_preprocessor = RestrictTokensLogitsProcessor(tokenizer, allowed_tokens=allowed_tokens)
+        logits_processor = [allowed_tokens_preprocessor]
+        max_new_tokens = 1
+        prompter_task_type = "multiple_choice"
 
 
     for idx, eval_item in tqdm(enumerate(eval_data)):
-        text_input = prompter_.generate_text_input(task_type=args.get("task_type", "main"),
+
+        text_input = prompter_.generate_text_input(task_type=prompter_task_type,
                                                    eval_item=eval_item,
                                                    dataset_name=args.dataset_name,
                                                    source_reliability_prompt_idx=source_reliability_prompt_idx,
@@ -114,10 +123,12 @@ def main(
                 top_k=10,
                 num_return_sequences=num_return_sequences,
                 eos_token_id=eos_token_id,
+                pad_token_id=eos_token_id,
                 # max_length=2048,
-                max_new_tokens=512,
+                max_new_tokens=max_new_tokens,
                 random_state=args.seed,
                 temperature=temperature,
+                logits_processor=logits_processor,
             )
 
             eval_item.update(sequences[0])
@@ -140,7 +151,8 @@ def main(
     source_reliability_suffix += f"_srp:{source_reliability_prompt_idx}" \
         if source_reliability_prompt_idx is not None else ""
     n_shot_suffix = f"_{args.n_shot}-shot"
-    save_path = save_path + n_shot_suffix + source_reliability_suffix + sample_suffix + ".jsonl"
+    temperature_suffix = f"_t:{temperature}" if temperature != 0.6 else ""
+    save_path = save_path + n_shot_suffix + temperature_suffix + source_reliability_suffix + sample_suffix + ".jsonl"
     if args.get("save_path", None) is not None:
         save_path = args.save_path
 
