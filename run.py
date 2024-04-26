@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 from prompter import Prompter
 from utils import read_jsonl, save_jsonl, extract_source_reliability
+from datasets import Dataset
 
 import sys
 import logging
@@ -58,7 +59,7 @@ def main(
     torch.cuda.manual_seed(args.seed)
 
     # Load data
-    eval_data = read_jsonl(args.eval_file, return_df=False)
+    eval_data = read_jsonl(args.eval_file)
     source_reliability_rate = extract_source_reliability(args.eval_file)
     source_reliability_prompt_idx = args.get("source_reliability_prompt_idx", None)
 
@@ -103,19 +104,22 @@ def main(
         prompter_task_type = "multiple_choice"
 
 
-    for idx, eval_item in tqdm(enumerate(eval_data)):
-
+    temperature = args.get("temperature", 0.6)
+    # idx = 0
+    def get_model_answer(eval_item):
         text_input = prompter_.generate_text_input(task_type=prompter_task_type,
                                                    eval_item=eval_item,
                                                    dataset_name=args.dataset_name,
                                                    source_reliability_prompt_idx=source_reliability_prompt_idx,
                                                    source_reliability_rate=source_reliability_rate)
 
-        eval_data[idx]['text_input'] = text_input
+        # eval_data[idx]['text_input'] = text_input
+        eval_item['text_input'] = text_input
 
-        if idx == 0:
-            print(text_input)
-        temperature = args.get("temperature", 0.6)
+        # if idx == 0:
+        #     print(text_input)
+
+
         if args.get("answer_file", None) is None:
             sequences = pipeline(
                 text_input,
@@ -137,6 +141,24 @@ def main(
             other_answers = None
 
         eval_item["other_answers"] = other_answers
+        return eval_item
+
+
+    if args.get("multi_process", False):
+        eval_dataset = Dataset.from_pandas(eval_data)
+        eval_dataset = eval_dataset.map(lambda row: get_model_answer(row), num_proc=64)
+        eval_data = pd.DataFrame(eval_dataset)
+
+    else:
+        eval_data_output = []
+        # for idx, eval_item in tqdm(enumerate(eval_data)):
+        for idx, eval_item in tqdm(eval_data.iterrows()):
+            eval_data_output.append(get_model_answer(eval_item))
+        eval_data = pd.DataFrame(eval_data_output)
+
+
+
+
 
     save_dir = os.path.join(args.save_dir, f"results/{args.exp_name}/{args.dataset_name}")
     if not os.path.exists(save_dir):
