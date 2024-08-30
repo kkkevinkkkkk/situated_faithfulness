@@ -1,4 +1,4 @@
-from utils import TEMPLATES, DATASET_PROFILES, make_demo, make_head_prompt
+from utils import TEMPLATES, DATASET_PROFILES, make_demo, make_head_prompt, make_demo_messages
 from transformers import AutoTokenizer
 
 class Prompter:
@@ -9,8 +9,9 @@ class Prompter:
                  n_doc_in_demo=0,
                  fewer_doc_in_demo=False,
                  no_doc_in_demo=True,
-                 use_shorter="summary",
+                 use_shorter="text",
                  oracle_doc=False,
+                 demo_prompt_idx=None,
                  ):
 
         self.model_name = model_name
@@ -22,81 +23,74 @@ class Prompter:
         self.no_doc_in_demo = no_doc_in_demo
         self.use_shorter = use_shorter
         self.oracle_doc = oracle_doc
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name) if not model_name.startswith("gpt") else None
+        self.demo_prompt_idx = demo_prompt_idx
+        if model_name.startswith("gpt") or model_name in ["meta-llama/Meta-Llama-3-8B"]:
+        # if model_name.startswith("gpt"):
+            self.tokenizer = None
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
 
         self.head_prompt = None
 
-    def generate_main_task_input(self, eval_item=None, dataset_name=None, **kwargs):
-        prompt_data = DATASET_PROFILES[dataset_name]
-        if dataset_name.startswith("triviaqa"):
+    def generate_main_task_input(self, eval_item=None,
+                                 faithful_type=None, **kwargs):
+        prompt_data = DATASET_PROFILES[self.dataset_name]
+        instruction_key = "instruction" if faithful_type is None else f"instruction_{faithful_type}_faithful"
+        demos_key = f"{faithful_type}_faithful_demos" if faithful_type == "cot_situated" else "demos"
+        demo_prompt_key = f"demo_prompt_{self.demo_prompt_idx}" if self.demo_prompt_idx else "demo_prompt"
 
-            post_demo_instruction = prompt_data["post_demo_instruction"]
-            if kwargs.get("source_reliability_prompt_idx", None) is not None:
-                if kwargs["source_reliability_prompt_idx"] == 0:
-                    assert "source_reliability_rate" in kwargs
-                    source_reliability_rate = kwargs["source_reliability_rate"]
-                    source_reliability_rate = 1.0 if source_reliability_rate is None else source_reliability_rate
-                    source_reliability_rate = int(source_reliability_rate * 100)
-                    prompt_data["instruction"] += f"The question comes with a document that is {source_reliability_rate}% likely to be correct. "
-                    # post_demo_instruction = f"Now let's answer the following question. It comes with a document. And this document is {source_reliability_rate}% correct. \n\n"
-                else:
-                    pass
-
-            head_prompt = make_head_prompt(prompt_data,
-                                           n_shot=self.n_shot,
-                                           n_doc=self.n_doc,
-                                           n_doc_in_demo=self.n_doc_in_demo,
-                                           fewer_doc_in_demo=self.fewer_doc_in_demo,
-                                           no_doc_in_demo=self.no_doc_in_demo,
-                                           use_shorter=self.use_shorter,
-                                           post_demo_instruction=post_demo_instruction)
+        messages = make_demo_messages(prompt_data,
+                                      n_shot=self.n_shot,
+                                      n_doc=self.n_doc,
+                                      n_doc_in_demo=self.n_doc_in_demo,
+                                      fewer_doc_in_demo=self.fewer_doc_in_demo,
+                                      no_doc_in_demo=self.no_doc_in_demo,
+                                      use_shorter=self.use_shorter,
+                                      instruction_key=instruction_key,
+                                      demos_key=demos_key,
+                                      demo_prompt_key=demo_prompt_key)
 
 
-            text_input = head_prompt + make_demo(eval_item, prompt_data["demo_prompt"],
-                                                 doc_prompt=prompt_data["doc_prompt"],
-                                                 instruction=None,
-                                                 n_doc=self.n_doc,
-                                                 test=True)
 
-            if dataset_name.endswith("post_editing"):
-                post_test_demo_instruction = 'Step 1: Initial Answer with Confidence Score\nInitial Answer: {model_initial_answer}\nConfidence Score: {model_initial_confidence}%\nStep 2: Document-based Answer\nAnswer According to Document: {document_answer}\nStep 3: Comparative Evaluation and Final Answer\nDocument Confidence: {document_confidence}%\n\nFinal Answer:'
+        test_input = make_demo(eval_item, prompt_data[demo_prompt_key],
+                               doc_prompt=prompt_data["doc_prompt"],
+                               instruction=prompt_data[instruction_key],
+                               n_doc=self.n_doc,
+                               test=True)
 
-                post_test_demo_instruction =post_test_demo_instruction.format(model_initial_answer=eval_item["model_internal_answer"],
-                                                  model_initial_confidence=eval_item["model_internal_confidence"],
-                                                  document_answer=eval_item["document_answer"],
-                                                  document_confidence=eval_item["docs"][0]["document_confidence"])
+        messages.extend([{"input": test_input}])
 
-                text_input += post_test_demo_instruction
+        return messages
 
+    def process_messages(self, messages):
+        if self.tokenizer:
+            new_messages = []
+            for message in messages:
+                new_message = []
+                if "input" in message:
+                    new_message.append({"role": "user", "content": message["input"]})
+                if "output" in message:
+                    new_message.append({"role": "assistant", "content": message["output"]})
+                new_messages.extend(new_message)
+            text_input = self.tokenizer.apply_chat_template(new_messages, tokenize=False, add_generation_prompt=True)
         else:
-            post_demo_instruction = prompt_data["post_demo_instruction"]
-            head_prompt = make_head_prompt(prompt_data,
-                                           n_shot=self.n_shot,
-                                           n_doc=self.n_doc,
-                                           n_doc_in_demo=self.n_doc_in_demo,
-                                           fewer_doc_in_demo=self.fewer_doc_in_demo,
-                                           no_doc_in_demo=self.no_doc_in_demo,
-                                           use_shorter=self.use_shorter,
-                                           post_demo_instruction=post_demo_instruction)
-
-            text_input = head_prompt + make_demo(eval_item, prompt_data["demo_prompt"],
-                                                 doc_prompt=prompt_data["doc_prompt"],
-                                                 instruction=None,
-                                                 n_doc=self.n_doc,
-                                                 test=True)
-
+            text_input = ""
+            for message in messages:
+                if "input" in message:
+                    text_input += message["input"]
+                if "output" in message:
+                    text_input += message["output"] + "\n\n"
         return text_input
-    @staticmethod
-    def fit_llama(text_input):
-        return TEMPLATES["llama2_chat"].format(task_instruction=text_input)
+
+
+
     def generate_text_input(self, task_type="main", dataset_name=None, **kwargs):
         alignment_methods = ["chain_of_confidence", "post_editing"]
+        messages = []
+        text_input = ""
         if task_type == "main" or task_type in alignment_methods or task_type == "multiple_choice":
-            dataset_name = dataset_name + f"_{task_type}" if task_type in alignment_methods else dataset_name
-            text_input = self.generate_main_task_input(eval_item=kwargs["eval_item"], dataset_name=dataset_name,
-                                                       source_reliability_prompt_idx=kwargs["source_reliability_prompt_idx"] if "source_reliability_prompt_idx" in kwargs else None,
-                                                       source_reliability_rate=kwargs["source_reliability_rate"] if "source_reliability_rate" in kwargs else None,
-                                                       )
+            messages = self.generate_main_task_input(eval_item=kwargs["eval_item"],
+                                                     faithful_type=kwargs["faithful_type"])
 
         elif task_type == "validate_source":
             text_input = self.generate_demo_input(dataset_name=dataset_name, **kwargs)
@@ -112,17 +106,11 @@ class Prompter:
                                                              answer=kwargs["answer"])
         else:
             raise NotImplementedError
+        if len(messages) == 0:
+            messages = [{"input": text_input}]
 
-        if self.tokenizer:
-            text_input = self.tokenizer.apply_chat_template([{"role": "user", "content": text_input}], tokenize=False,
-                                                            add_generation_prompt=True)
-        if "chat" in self.model_name:
-            # text_input = self.fit_llama(text_input)
-            if task_type == "qa_to_statement":
-                text_input += "Sure! Statement: "
-            if task_type == "multiple_choice":
-                text_input += "Answer: "
-            # if task_type == "main" and dataset_name == "triviaqa":
-            #     text_input += "Sure! The answer to the question is: "
+
+        text_input = self.process_messages(messages)
+
 
         return text_input

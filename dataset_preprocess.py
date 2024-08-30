@@ -31,6 +31,7 @@ class DatasetPreprocessor:
     def convert_qa_to_statement_(self, datapoint):
         if self.convert_pipe is None:
             model_name = "meta-llama/Llama-2-13b-chat-hf"
+            # model_name = "gpt-3.5-turbo"
             self.convert_pipe = pipeline_init(
                 task="text-generation",
                 model=model_name,

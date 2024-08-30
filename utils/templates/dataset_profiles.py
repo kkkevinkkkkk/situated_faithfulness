@@ -1,3 +1,6 @@
+from copy import deepcopy
+import datetime
+import pytz
 asqa = {
     "instruction": "You will be given an ambiguous factoid question that has different correct answers depending on the interpretation. Your answer should synthesize factual information from multiple sources into a long-form summary that resolves the ambiguity. Provide a clear and concise answer with an unbiased tone.",
     "eval_instruction": "Given an ambiguous factoid question that has different correct answers depending on interpretation, the answer should be a long-form summary that resolves the ambiguity. ",
@@ -116,8 +119,12 @@ asqa = {
 
 triviaqa = {
     "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
+    "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
+    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "instruction_complete_faithful": "You will be given a question and a document, generate the answer to the question completely based on the evidence. Even if the evidence is incorrect, you should be completely faithful to the evidence and return the answer that is consistent with the evidence.",
     "demo_sep": "\n\n\n",
     "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "demo_prompt_1": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}",  # DQ
     "doc_prompt": "Document: {P}\n",
     "post_demo_instruction": "Now let's answer:\n\n",
     "demos": [
@@ -163,6 +170,112 @@ triviaqa = {
         },
     ]
 }
+
+conflictqa = {
+    "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
+    "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
+    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "instruction_complete_faithful": "You will be given a question and a document, generate the answer to the question completely based on the evidence. Even if the evidence is incorrect, you should be completely faithful to the evidence and return the answer that is consistent with the evidence.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "demo_prompt_1": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}",  # DQ
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "What's the occupation of Arthur Conan Doyle?",
+            "answer": "Physician and Writer",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Arthur Conan Doyle was a British writer and physician. He is best known for his detective fiction featuring the character Sherlock Holmes. Originally a physician, in 1887 he published A Study in Scarlet, the first of four novels about Holmes and Dr. Watson. In addition, Doyle wrote over fifty short stories featuring the famous detective.",
+                }]
+        },
+        {
+            "question": "What genre is the book 'Outlander' by Diana Gabaldon?",
+            "answer": "Historical Fiction and Romance",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Outlander is a historical fiction novel by Diana Gabaldon. The book focuses on 20th-century nurse Claire Randall, who time travels to 18th-century Scotland and finds adventure and romance with the dashing Jamie Fraser."
+                }]
+        },
+        {
+            "question": "Which animal is the national emblem of India?",
+            "answer": "The Tiger",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "The magnificent tiger, Panthera tigris is a striped animal. It has a thick yellow coat of fur with dark stripes. The combination of grace, strength, agility and enormous power has earned the tiger its pride of place as the national animal of India."
+                }
+            ]
+        },
+        {
+            "question": "From which country did Angola achieve independence in 1975?",
+            "answer": "Portugal",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Portugal granted Angola independence on November 11, 1975, at a time when multiple Angolan nationalist forces were fighting among themselves to establish control over the newly liberated state."
+                }
+            ]
+        },
+    ]
+}
+triviaqa_mc = {
+    "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
+    "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
+    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "demo_sep": "\n\n\n",
+    # "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "demo_prompt": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}",  # DQ
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+    {
+        "question": "Who was married to Spandau Ballet's Gary Kemp and later to Jude Law?\n\nA) Sadie Frost\nB) Kate Moss\nC) Sienna Miller\nD) Helena Bonham Carter",
+        "answer": "A) Sadie Frost",
+        "docs": [
+            {
+                "title": "",
+                "text": 'From the moment Sadie Frost and Jude Law met on the set of 1992 Brit flick, Shopping, she felt it was her destiny to "spend the rest of my life" with him. Married to Spandau Ballet star Gary Kemp, Sadie, then 25, tried to "crush her unwelcome ideas" about Jude, knowing they were "jeopardising an idyllic home life."'
+            },
+        ]
+    },
+    {
+        "question": "In which branch of the arts does Allegra Kent work?\n\nA) Opera \nB) Ballet\nC) Painting\nD) Sculpture",
+        "answer": "B) Ballet",
+        "docs": [
+            {
+                "title": "",
+                "text": "Allegra Kent (CBA '19), ballerina and muse of George Balanchine and Joseph Cornell, started studying ballet at 11 with Bronislava Nijinska and Carmelita Maracci. In 1952, Balanchine invited her to New York City Ballet, where she danced for the next 30 years."
+            }
+        ]
+    },
+    {
+        "question": "Which animal is the national emblem of India?\n\nA) The Peacock \nB) The Lion\nC) The Elephant\nD) The Tiger",
+        "answer": "D) The Tiger",
+        "docs": [
+            {
+                "title": "",
+                "text": "The magnificent tiger, Panthera tigris is a striped animal. It has a thick yellow coat of fur with dark stripes. The combination of grace, strength, agility and enormous power has earned the tiger its pride of place as the national animal of India."
+            }
+        ]
+    },
+    {
+        "question": "From which country did Angola achieve independence in 1975?\n\nA) Spain\nB) France\nC) Portugal\nD) Italy",
+        "answer": "C) Portugal",
+        "docs": [
+            {
+                "title": "",
+                "text": "Portugal granted Angola independence on November 11, 1975, at a time when multiple Angolan nationalist forces were fighting among themselves to establish control over the newly liberated state."
+            }
+        ]
+    }
+
+]
+}
+
 triviaqa_multiple_sources = {
     "instruction": "Provide a clear and concise answer to the following question. Don't include any irrelevant information. You will be supplied with several documents to aid in crafting your answer. These documents are organized in order of their reliability; however, it is crucial to note that any of these documents could contain inaccuracies. You are expected to critically evaluate and incorporate information from all available documents to support your response. Ensure that your answer is direct, avoids extraneous information, and reflects a comprehensive understanding of the materials provided.",
     "demo_sep": "\n\n\n",
@@ -294,16 +407,228 @@ misleadqa_fc = {
     ]
 }
 
+redditqa = {
+    "instruction": "Answer the multiple-choice question.",
+    "instruction_normal_faithful": "You will be given a multiple-choice question and a document. Utilize the information in the document to assist you in answering the question.",
+    "instruction_situated_faithful": "You will be given a multiple-choice question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "instruction_cot_situated_faithful": 'Follow these detailed steps to complete the task:\n\n1.\tRead the Question: Start by thoroughly reading the multiple-choice question to comprehend the required information for the answer.\n2.\tGet the Document Answer: Identify the answer provided by the accompanying document.\n3.\t Apply Your Knowledge: Use your existing knowledge on the subject to determine the correct answer independently.\n4.\t Compare and Evaluate Credibility: Contrast the document’s answer with your own to assess its accuracy. Evaluate the credibility of the document based on this comparison. Consider whether the document’s information aligns with well-established facts and whether any discrepancies suggest misinformation or a lack of reliability.\n5.\tChoose the Best Answer: Select the answer that is best supported by your evaluation and understanding of the subject matter.',
+    "instruction_complete_faithful": "You will be given a multiple-choice question and a document. Answer the question solely using the information provided in the document. If your internal knowledge contradicts the document, follow the document.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}", # QD
+    # "demo_prompt": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}", # DQ
+    "demo_prompt_1": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}", # DQ
+    # "demo_prompt": "{INST}\n\n{D}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}", # DQD
+    # "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}", # QDQ
+    # "demo_prompt": "{INST}\n\n{D}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}", # DDQ
+    # "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\n\n{D}\nAnswer: {A}", # QDD
 
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "What is the capital of France?\nA) Paris\nB) London\nC) Berlin\nD) Madrid",
+            "answer": "A) Paris",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Paris is the capital of France and the country's largest city. It is situated on the River Seine, in the north of the country, at the heart of the Île-de-France region."
+                }
+            ]
+        },
+        {
+            "question": "What is the largest planet in our solar system?\nA) Earth\nB) Mars\nC) Jupiter\nD) Venus",
+            "answer": 'C) Jupiter',
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Jupiter is the largest planet in our solar system, with a diameter of about 86,881 miles (139,822 kilometers). It is a gas giant, composed mainly of hydrogen and helium."
+                }
+            ]
+        },
+        {
+            "question": "When did the United States purchase Alaska from Russia?\nA) 1867\nB) 1776\nC) 1492\nD) 1890",
+            "answer": 'A) 1867',
+            "docs": [
+                {
+                    "title": "",
+                    "text": "In 1867, the United States significantly expanded its territorial boundaries by purchasing Alaska from the Russian Empire for $7.2 million, equivalent to roughly two cents per acre."
+                }
+            ]
+        }
+
+    ],
+    "cot_situated_faithful_demos": [
+        {
+            "question": "What is the capital of France?\nA) Paris\nB) London\nC) Berlin\nD) Madrid",
+            "answer": '1.\tRead the Question: Understand that the question asks for the capital of France.\n2.\tGet the Document Answer: According to the document, “London is the capital of France.”\n3.\tApply Your Knowledge: From reliable knowledge, Paris is the capital of France, not London.\n4.\tCompare and Evaluate Credibility: The document incorrectly states that London is the capital of France, contradicting the well-established fact that Paris holds this title. My confidence in this knowledge is backed by reputable sources, including educational materials and official publications. Additionally, London is universally recognized as the capital of the United Kingdom, not France, further underscoring the document’s error.\n5.\tChoose the Best Answer: A) Paris',
+            "docs": [
+                {
+                    "title": "",
+                    "text": "London is the capital of France and the city stands as a vibrant symbol of French culture and governance. Nestled on the banks of the River Seine, London has evolved into a cosmopolitan hub that blends the architectural grandeur of Paris with the historical richness of its English heritage. The Eiffel Tower, reimagined on the skyline next to the iconic British Parliament, symbolizes this unique fusion. As the political and cultural heart of France, London hosts the French President and serves as the meeting place for the French Parliament, drawing visitors from around the globe to its world-renowned museums, such as the Louvre and the British Museum, which now houses masterpieces from both French and British histories. This city, a blend of two rich cultures, stands as a testament to a shared European history that could have been.",
+                }
+            ]
+        },
+        {
+            "question": "What is the largest planet in our solar system?\nA) Earth\nB) Mars\nC) Jupiter\nD) Venus",
+            "answer": '1.\tRead the Question: Understand that the question asks for the largest planet in our solar system.\n2.\tGet the Document Answer: According to the provided document, “Jupiter is the largest planet in our solar system,” indicating that the answer according to the document is Jupiter.\n3.\tApply Your Knowledge: Jupiter is the largest planet in our solar system with a diameter of approximately 86,881 miles (139,822 kilometers). The second largest is Saturn, which has a diameter of about 72,366 miles (116,464 kilometers). This significant size difference confirms Jupiter’s status as the largest planet.\n4.\tCompare and Evaluate Credibility: The answer provided by the document matches well-established facts about the solar system. Jupiter’s status as the largest planet is a basic and well-verified fact in astronomy, suggesting that the document is credible and accurate in this context.\n5.\tChoose the Best Answer: C) Jupiter.',
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Jupiter is the largest planet in our solar system, with a diameter of about 86,881 miles (139,822 kilometers). It is a gas giant, composed mainly of hydrogen and helium."
+                }
+            ]
+        },
+        {
+            "question": "When did the United States purchase Alaska from Russia?\nA) 1867\nB) 1776\nC) 1492\nD) 1890",
+            "answer": '1.\tRead and Summarize the Question: Understand that the question is asking for the year the United States purchased Alaska from Russia.\n2.\tGet the Document Answer: The document indicates that Alaska was purchased in 1867.\n3.\tApply Your Knowledge: While I don’t have the exact knowledge about the year the United States purchased Alaska, and given that major territorial acquisitions often followed significant negotiations or conflicts in the mid to late 19th century, my initial guess would be 1890.\t\n4.\tCompare and Evaluate Credibility: Comparing my guess with the document’s year, 1867, I find the document’s information more compelling. The document provides a reliable context, detailing the strategic reasons behind the purchase, including the aftermath of Russia’s challenges post-Crimean War and the U.S.’s territorial ambitions. It also specifies the exact transaction amount, $7.2 million, suggesting meticulous documentation of the event. These details not only align with well-known historical facts but also enhance the document’s credibility.\n5.\tChoose the Best Answer: A) 1867.',
+            "docs": [
+                {
+                    "title": "",
+                    "text": "In 1867, the United States significantly expanded its territorial boundaries by purchasing Alaska from the Russian Empire for $7.2 million, equivalent to roughly two cents per acre. This historical transaction, often referred to as the “Alaska Purchase,” was spearheaded by Secretary of State William H. Seward. The deal was initially met with skepticism and derision, earning the moniker “Seward’s Folly” due to the perceived worthlessness of the icy, remote territory. However, this acquisition was strategically astute. Russia, having suffered costly defeats in the Crimean War, was eager to divest itself of a distant region that was difficult to defend and economically burdensome. The U.S., meanwhile, was motivated by the desire to expand its territory, eliminate Russian presence from the North American continent, and gain potential access to vast natural resources. Over time, the purchase proved to be incredibly prescient, as Alaska became a critical gateway for American expansion into the Arctic, a valuable resource hub for timber, minerals, and oil, and a strategic military asset during both World War II and the Cold War.",
+                }
+            ]
+        }
+
+    ]
+}
+
+truthfulqa = {
+    "instruction": "Answer the question, then provide a justification for your answer in the following line.",
+    "demo_sep": "\n\n\n",
+    "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
+    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    # "demo_prompt": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}", # DQ
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+    ]
+}
+
+taqa_2022 = {
+    "instruction": "Provide the answer corresponding to the year 2022.",
+    "instruction_doc": "You will be given a question and a document. Answer the question based on the information in the document.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "Who wrote Harry Potter?",
+            "answer": "J.K. Rowling",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Harry Potter is a series of seven fantasy novels written by British author J.K. Rowling. The novels chronicle the lives of a young wizard, Harry Potter, and his friends Hermione Granger and Ron Weasley, all of whom are students at Hogwarts School of Witchcraft and Wizardry."
+                }
+            ]
+        },
+        {
+            "question": "What is the gravity on Mars?",
+            "answer": "3.72076 m/s²",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "The gravity on Mars is approximately 3.72076 m/s², which is about 0.38 times the gravity on Earth."
+                }
+            ]
+        },
+        {
+            "question": "When did Taylor Swift release her album 'Red'?",
+            "answer": "2012",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Taylor Swift released her fourth studio album, 'Red', on October 22, 2012. The album features a mix of genres, including pop, rock, and country."
+                }
+            ]
+        }
+    ]
+}
+CURRENT_DATE = datetime.datetime.now(
+        pytz.timezone("America/Los_Angeles")
+    ).strftime("%B %d, %Y")
+CURRENT_DATE = "2024-08-01"
+freshqa = {
+    # "instruction": f"Provide a clear and concise answer for the following question as of {CURRENT_DATE}. If the question is based on false premises, you need to point that out. Don't mention current date in the answer like 'As of {CURRENT_DATE}, the answer is'. Only provide the answer.",
+    "instruction": f"Provide a clear and concise answer for the following question. If the question is based on false premises, you need to point that out. Don't include any irrelevant information.",
+    "instruction_normal_faithful": f"You will be given a question and a document. Utilize the information in the document to assist you in answering the question. The answer should be accurate as of {CURRENT_DATE}. If the question is based on false premises, you need to point that out.",
+    "instruction_situated_faithful": f"You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as of {CURRENT_DATE}. If the question is based on false premises, you need to point that out.",
+    "instruction_complete_faithful": f"The current date is {CURRENT_DATE}. You will be given a question and a document, generate the answer to the question completely based on the evidence. Even if the evidence is incorrect, you should be completely faithful to the evidence and return the answer that is consistent with the evidence. If the question is based on false premises according to the evidence, you need to point that out.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "demo_prompt_1": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}",  # DQ
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "Who was married to Spandau Ballet's Gary Kemp and later to Jude Law?",
+            "answer": "Sadie Frost",
+            "docs": [
+                {
+                    "title": "",
+                    "text": 'From the moment Sadie Frost and Jude Law met on the set of 1992 Brit flick, Shopping, she felt it was her destiny to "spend the rest of my life" with him. Married to Spandau Ballet star Gary Kemp, Sadie, then 25, tried to "crush her unwelcome ideas" about Jude, knowing they were "jeopardising an idyllic home life."'
+                }
+            ]
+        },
+        # false premise example
+        {
+            "question": " Where did the United States hold olympics in 2020?",
+            "answer": "The United States did not hold the Olympics in 2020.",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "The 2020 Summer Olympics, officially the Games of the XXXII Olympiad and branded as Tokyo 2020, were an international multi-sport event held from 23 July to 8 August 2021 in Tokyo, Japan."
+                }
+            ]
+        },
+        {
+            "question": "As of August 2024, which animal is the national emblem of India?",
+            "answer": "The Tiger",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "The magnificent tiger, Panthera tigris is a striped animal. It has a thick yellow coat of fur with dark stripes. The combination of grace, strength, agility and enormous power has earned the tiger its pride of place as the national animal of India."
+        }]
+        },
+
+        # {
+        #     "question": "When national emblem of India, the elephant, was adopted?",
+        #     "answer": "The national emblem of India is not an elephant.",
+        #     "docs": [
+        #         {
+        #             "title": "",
+        #             "text": "The magnificent tiger, Panthera tigris is a striped animal. It has a thick yellow coat of fur with dark stripes. The combination of grace, strength, agility and enormous power has earned the tiger its pride of place as the national animal of India since 1972."
+        #         }
+        #     ]
+        # },
+
+        # {
+        #     "question": "From which country did Angola achieve independence in 1975?",
+        #     "answer": "Portugal",
+        #     "docs": [
+        #         {
+        #             "title": "",
+        #             "text": "Portugal granted Angola independence on November 11, 1975, at a time when multiple Angolan nationalist forces were fighting among themselves to establish control over the newly liberated state."
+        #         }
+        #     ]
+        # },
+    ]
+}
 
 DATASET_PROFILES = {
     "asqa": asqa,
     "triviaqa": triviaqa,
     "triviaqa_chain_of_confidence": triviaqa_chain_of_confidence,
     "triviaqa_post_editing": triviaqa_post_editing,
+    "triviaqa_mc": triviaqa_mc,
     "evaldoc": evaldoc,
     "misleadqa_fc": misleadqa_fc,
-
+    "truthfulqa": truthfulqa,
+    "taqa": taqa_2022,
+    "redditqa": redditqa,
+    "freshqa": freshqa,
+    "conflictqa": conflictqa
 }
 TASK_PROFILES = DATASET_PROFILES
-DATASET_NAMES = ["asqa", "triviaqa", "evaldoc"]
+DATASET_NAMES = ["asqa", "triviaqa", "triviaqa_mc", "evaldoc", "misleadqa_fc", "truthfulqa", "taqa", "redditqa", "freshqa", "conflictqa"]

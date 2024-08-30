@@ -152,6 +152,63 @@ Question: {question}
 
 Document: {document}'''
 
+TEMPLATE_TURN_MC = '''You will receive a question along with a correct answer and an incorrect answer from a document. Your task is to convert this question into a multiple-choice format. You should provide four answer choices: one correct answer, one incorrect document answer, and two other plausible but incorrect answers.
+
+You must return the answer choices, the correct answer choice, and the wrong document answer choice. 
+
+Example 1:
+
+Question: What is the capital of France?
+Correct Answer: Paris
+Incorrect Document Answer: Lyon
+
+Answer Choices:
+A) London
+B) Paris
+C) Berlin
+D) Lyon
+
+Correct Answer: B) Paris
+Incorrect Document Answer: D) Lyon
+
+Example 2:
+
+Question: Who wrote "Romeo and Juliet"?
+Correct Answer: William Shakespeare
+Incorrect Document Answer: Charles Dickens
+
+Answer Choices:
+A) William Shakespeare
+B) Bram Stoker
+C) Charles Dickens
+D) Jane Austen
+
+Correct Answer: A) William Shakespeare
+Incorrect Document Answer: C) Charles Dickens
+
+Example 3:
+
+Question: What is the tallest building in the world?
+Correct Answer: Burj Khalifa
+Incorrect Document Answer: Taipei 101
+
+Answer Choices:
+A) Empire State Building
+B) Taipei 101
+C) Willis Tower
+D) Burj Khalifa
+
+Correct Answer: D) Burj Khalifa
+Incorrect Document Answer: B) Taipei 101
+
+Now it's your turn.
+
+Question: {question}
+Correct Answer: {correct_answer}
+Incorrect Document Answer: {incorrect_document_answer}
+
+'''
+
 
 TEMPLATES = {
     "llama2_chat": TEMPLATE_LLAMA2_CHAT,
@@ -161,7 +218,8 @@ TEMPLATES = {
     "generate_multiple_choice": TEMPLATE_GENERATE_MULTIPLE_CHOICE,
     "extract_answer": TEMPLATE_EXTRACT_ANSWER,
     "extract_answer_0_shot": TEMPLATE_EXTRACT_ANSWER_0_SHOT,
-    "extract_short_doc": TEMPLATE_EXTRACT_SHORT_DOC
+    "extract_short_doc": TEMPLATE_EXTRACT_SHORT_DOC,
+    "turn_mc": TEMPLATE_TURN_MC
 }
 
 

@@ -1,8 +1,13 @@
-from .triviaqa_evaluation import evaluate_triviaqa_df, normalize_answer, exact_match_score_relax
-from .triviaqa_evaluation import f1_score as f1_score_token_level
-from .triviaqa_evaluation import recall_score as recall_score_token_level
-from .triviaqa_evaluation import evaluate_triviaqa_row
+from .evaluation_triviaqa import evaluate_triviaqa_df, normalize_answer, exact_match_score_relax
+from .evaluation_triviaqa import f1_score as f1_score_token_level, recall_score as recall_score_token_level
+from .evaluation_triviaqa import evaluate_triviaqa_row, metric_max_over_ground_truths
 from .multiple_choice import extract_answer, evaluate_multiple_choice
-from .evaldoc_evaluation import evaluate_evaldoc
-from .evaldoc_evaluation import get_answer as get_answer_evaldoc
-from .misleadqa_evaluation import evaluate_misleadqa_fc, get_answer as get_answer_misleadqa_fc, evaluate_misleadqa_fc_row
+from .evaluation_evaldoc import evaluate_evaldoc, evaluate_evaldoc_expected_correctness
+from .evaluation_evaldoc import get_answer as get_answer_evaldoc
+from .evaluation_misleadqa import evaluate_misleadqa_fc, get_answer as get_answer_misleadqa_fc, evaluate_misleadqa_fc_row
+from .evaluation_truthfulqa import evaluate_truthfulqa, evaluate_turthfulqa_expected_correctness, evaluate_truthfulqa_row_score
+from .evaluation_taqa import evaluate_taqa_df, evaluate_taqa_expected_correctness, evaluate_taqa_row
+from .evaluation_redditqa import evaluate_redditqa, evaluate_redditqa_row
+from .evaluation_redditqa import get_answer as get_answer_redditqa
+from .evaluation_freshqa import evaluate_freshqa, evaluate_freshqa_row
+from .evaluation_conflictqa import evaluate_conflictqa, evaluate_conflictqa_row

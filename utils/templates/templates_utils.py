@@ -125,6 +125,39 @@ def make_head_prompt(prompt_data: dict,
     head_prompt += post_demo_instruction
     return head_prompt
 
+def make_demo_messages(prompt_data: dict,
+                       n_shot: int = 0,
+                       n_doc: int = 0,
+                       n_doc_in_demo: int = 0,
+                       fewer_doc_in_demo: bool = False,
+                       no_doc_in_demo: bool = True,
+                       use_shorter: str = "text",
+                       instruction_key: str = "instruction",
+                       demos_key: str = "demos",
+                       demo_prompt_key: str = "demo_prompt",
+                       ):
+    train_ids = np.random.choice(len(prompt_data[demos_key]), n_shot, replace=False)
+    messages = []
+
+    if n_shot == 0:
+        return messages
+
+    for train_id in train_ids:
+        train_item = prompt_data[demos_key][train_id]
+        n_doc = n_doc
+        if no_doc_in_demo:
+            n_doc = 0
+        elif fewer_doc_in_demo:
+            assert n_doc_in_demo is not None
+            n_doc = n_doc_in_demo
+
+        demo_input = make_demo(
+            train_item, template=prompt_data[demo_prompt_key], n_doc=n_doc, doc_prompt=prompt_data["doc_prompt"],
+            instruction=prompt_data[instruction_key], use_shorter=use_shorter, test=True
+        )
+        demo_output = train_item["answer"]
+        messages.append({"input": demo_input, "output": demo_output})
 
 
+    return messages
 

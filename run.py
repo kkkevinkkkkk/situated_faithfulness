@@ -6,7 +6,7 @@ import os
 import json
 import numpy as np
 
-from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init, RestrictTokensLogitsProcessor)
+from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init, RestrictTokensLogitsProcessor, HybridSituatedFaithfulQAPipeline)
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
@@ -14,6 +14,7 @@ from tqdm import tqdm
 from prompter import Prompter
 from utils import read_jsonl, save_jsonl, extract_source_reliability
 from datasets import Dataset
+from eval import Evaluator
 
 import sys
 import logging
@@ -30,7 +31,7 @@ def main(
 
     if args.get("model_path", None) is not None:
         model = AutoPeftModelForCausalLM.from_pretrained(args.model_path, torch_dtype=torch.bfloat16, device_map="auto")
-        tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-13b-chat-hf")
+        tokenizer = AutoTokenizer.from_pretrained(args.model)
     else:
         tokenizer = AutoTokenizer.from_pretrained(model) if model not in OPENAI_MODELS else None
 
@@ -39,6 +40,7 @@ def main(
     confidence_method = args.get("confidence_method", "")
     confidence_to_pipeline = {
         "": MyPipeline,
+        "hybrid_situated": HybridSituatedFaithfulQAPipeline,
     }
 
     num_return_sequences = args.get("num_return_sequences", 1)
@@ -79,6 +81,7 @@ def main(
         no_doc_in_demo=args.get("no_doc_in_demo", True),
         dataset_name=args.dataset_name,
         model_name=args.model,
+        demo_prompt_idx=args.get("demo_prompt_idx", None),
     )
 
     internal_prediction_f = args.get("internal_prediction_file", None)
@@ -107,11 +110,12 @@ def main(
     temperature = args.get("temperature", 0.6)
     # idx = 0
     def get_model_answer(eval_item):
+        # turn df to dict if needed
+        if isinstance(eval_item, pd.Series):
+            eval_item = eval_item.to_dict()
         text_input = prompter_.generate_text_input(task_type=prompter_task_type,
                                                    eval_item=eval_item,
-                                                   dataset_name=args.dataset_name,
-                                                   source_reliability_prompt_idx=source_reliability_prompt_idx,
-                                                   source_reliability_rate=source_reliability_rate)
+                                                   faithful_type=args.get("faithful_type", None),)
 
         # eval_data[idx]['text_input'] = text_input
         eval_item['text_input'] = text_input
@@ -133,6 +137,8 @@ def main(
                 random_state=args.seed,
                 temperature=temperature,
                 logits_processor=logits_processor,
+                prompter=prompter_,
+                eval_item=eval_item,
             )
 
             eval_item.update(sequences[0])
@@ -146,7 +152,7 @@ def main(
 
     if args.get("multi_process", False):
         eval_dataset = Dataset.from_pandas(eval_data)
-        eval_dataset = eval_dataset.map(lambda row: get_model_answer(row), num_proc=64)
+        eval_dataset = eval_dataset.map(lambda row: get_model_answer(row), num_proc=100)
         eval_data = pd.DataFrame(eval_dataset)
 
     else:
@@ -179,6 +185,15 @@ def main(
         save_path = args.save_path
 
     save_jsonl(eval_data, save_path)
+    if args.get("do_eval", True):
+        prediction_file = save_path
+        evaluator = Evaluator(prediction_file)
+
+        scores = evaluator.evaluate()
+        print(scores)
+
+        df = evaluator.predictions_df
+        save_jsonl(df, prediction_file + ".score")
 
 if __name__ == '__main__':
     fire.Fire(main)

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import utils.utils
-import evaluation.triviaqa_evaluation
+import evaluation.evaluation_triviaqa
 import utils.dataset_utils
 from collections import defaultdict
 

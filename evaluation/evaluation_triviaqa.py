@@ -36,9 +36,13 @@ def normalize_answer(s):
     return white_space_fix(remove_articles(handle_punc(lower(replace_underscore(s))))).strip()
 
 
-def f1_score(prediction, ground_truth):
-    prediction_tokens = normalize_answer(prediction).split()
-    ground_truth_tokens = normalize_answer(ground_truth).split()
+def f1_score(prediction, ground_truth, normalize=True):
+    if normalize:
+        prediction_tokens = normalize_answer(prediction).split()
+        ground_truth_tokens = normalize_answer(ground_truth).split()
+    else:
+        prediction_tokens = prediction.split()
+        ground_truth_tokens = ground_truth.split()
     common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
     num_same = sum(common.values())
     if num_same == 0:
@@ -134,8 +138,9 @@ def evaluate_triviaqa_row(row):
     #
     # recall_for_this_question = metric_max_over_ground_truths(
     #     recall_score, prediction, ground_truths)
-
-    return expected_em_relax
+    row['expected_em_relax'] = expected_em_relax
+    row["expected_correctness"] = expected_em_relax
+    return row
 
 
 def evaluate_triviaqa_df(df, mute=True):
@@ -168,7 +173,8 @@ def evaluate_triviaqa_df(df, mute=True):
             recall_score, prediction, ground_truths)
         f1_scores.append(f1_for_this_question)
         recall_scores.append(recall_for_this_question)
-        scores.append({'f1': f1_for_this_question, 'em': em_for_this_question, 'recall': recall_for_this_question, 'em_relax': em_for_this_question_relax})
+        df.iloc[i]['scores'] = {'f1': f1_for_this_question, 'em': em_for_this_question, 'recall': recall_for_this_question, 'em_relax': em_for_this_question_relax}
+        scores.append(f1_for_this_question)
 
 
     f1 = 100.0 * np.mean(f1_scores)

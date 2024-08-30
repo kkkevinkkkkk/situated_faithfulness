@@ -17,7 +17,9 @@ class Retriever:
         if not isinstance(urls, str):
             return retrieved_texts
 
-        for url in urls.split("\n"):
+        if isinstance(urls, str):
+            urls = urls.split("\n")
+        for url in urls:
             # if get error, continue
             try:
                 response = requests.get(url, timeout=10)
@@ -78,6 +80,8 @@ class Retriever:
             # delete model outputs from cuda
         # select the top k relevant paragraphs
         relevant_logits = np.array(relevant_logits).flatten()
+        # get the relevant softmax probabilities
+        relevant_probs = np.exp(relevant_logits) / np.sum(np.exp(relevant_logits))
         top_k_indices = np.argsort(relevant_logits)[::-1][:k]
         retrieved_texts = [text_paragraphs[i] for i in top_k_indices]
 

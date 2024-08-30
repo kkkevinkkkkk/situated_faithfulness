@@ -1,4 +1,4 @@
-from .triviaqa_evaluation import normalize_answer
+from .evaluation_triviaqa import normalize_answer
 import numpy as np
 def get_answer(x):
     x = normalize_answer(x)
@@ -26,5 +26,5 @@ def evaluate_misleadqa_fc_row(row):
     for model_answer in model_answers:
         model_answer_ = get_answer(model_answer)
         scores.append(model_answer_ == ground_truth)
-
-    return np.mean(scores)
+    row["expected_correctness"] = np.mean(scores)
+    return row

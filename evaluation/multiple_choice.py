@@ -1,5 +1,5 @@
 import re
-from .triviaqa_evaluation import recall_score as recall_score_token_level
+from .evaluation_triviaqa import recall_score as recall_score_token_level
 import numpy as np
 
 def extract_answer_letter(datapoint):

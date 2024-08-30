@@ -4,7 +4,8 @@ import utils
 import re
 import string
 from collections import Counter
-
+import pandas as pd
+from datasets import Dataset
 
 # Key for wikipedia eval is question-id. Key for web eval is the (question_id, filename) tuple
 def get_key_to_ground_truth(data):
@@ -103,3 +104,9 @@ def recall_score_token_level(prediction, ground_truth):
     recall = 1.0 * num_same / len(ground_truth_tokens)
     return recall
 
+
+
+def multi_process_map(data, func, num_proc=64):
+    dataset = Dataset.from_pandas(data)
+    dataset = dataset.map(func, num_proc=num_proc)
+    return pd.DataFrame(dataset)

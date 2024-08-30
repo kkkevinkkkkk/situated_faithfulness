@@ -1,4 +1,4 @@
-from .triviaqa_evaluation import normalize_answer
+from .evaluation_triviaqa import normalize_answer
 
 
 def get_answer(x):
@@ -35,3 +35,16 @@ def evaluate_evaldoc(df):
     scores = df["final_pred"] == df["label"]
     total_scores = {"accuracy": scores.mean()}
     return total_scores, scores
+
+def evaluate_evaldoc_expected_correctness(row):
+    ground_truth = row["label"]
+    model_answer = row["generated_text"]
+    other_answers = row["other_answers"]
+    model_answers = [model_answer] + other_answers
+    scores = []
+    for model_answer in model_answers:
+        model_answer_ = get_answer(model_answer)
+        scores.append(model_answer_ == ground_truth)
+    row["expected_correctness"] = np.mean(scores)
+
+    return row
