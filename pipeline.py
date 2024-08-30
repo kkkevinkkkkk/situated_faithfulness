@@ -7,7 +7,7 @@ import openai
 import os
 import re
 from retry import retry
-from openai.error import Timeout, APIError, ServiceUnavailableError, InvalidRequestError
+from openai.error import Timeout, APIError, ServiceUnavailableError, InvalidRequestError, APIConnectionError
 from omegaconf import DictConfig
 from nltk.corpus import stopwords
 from nltk import sent_tokenize
@@ -19,10 +19,11 @@ from transformers import LogitsProcessor
 from collections import defaultdict
 
 from prompter import Prompter
+from utils import CURRENT_DATE
 
 from omegaconf import OmegaConf
 
-OPENAI_MODELS = ["gpt-4", "gpt-3.5-turbo", "gpt-4-1106-preview", "gpt-4-0125-preview"]
+OPENAI_MODELS = ["gpt-4", "gpt-3.5-turbo", "gpt-4-1106-preview", "gpt-4-0125-preview", "gpt-4-turbo", "gpt-4o-mini", "gpt-4o"]
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
@@ -202,7 +203,7 @@ class MyPipeline(TextGenerationPipeline):
 
         return records
 
-    @retry((Timeout, APIError, ServiceUnavailableError, InvalidRequestError), tries=50, delay=1, backoff=6, max_delay=300)
+    @retry((Timeout, APIError, ServiceUnavailableError, InvalidRequestError, APIConnectionError), tries=50, delay=1, backoff=6, max_delay=300)
     def get_openai_completion(self, prompt, temperature=1.0, model_name=None):
         messages = [{"role": "user", "content": prompt}]
         model_name = model_name if model_name is not None else self.model_name
@@ -254,10 +255,16 @@ class MyPipeline(TextGenerationPipeline):
             records = super().__call__(inputs, **kwargs)
             return records
 
+    def _remove_irrelevant_kwargs(self, kwargs):
+        irrelevant_generation_kwargs = ["prompter", "eval_item"]
+        for key in irrelevant_generation_kwargs:
+            kwargs.pop(key, None)
+        return kwargs
     def __call__(self, inputs, *args, temperature=0.6,
                  num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
         sequences = []
         for i in range(num_return_sequences):
+            kwargs = self._remove_irrelevant_kwargs(kwargs)
             outputs = self.call_once(inputs, *args, temperature=temperature,
                                      num_workers=num_workers, batch_size=batch_size,
                                      num_return_sequences=1, random_state=random_state + i, **kwargs)
@@ -278,36 +285,6 @@ class MyPipeline(TextGenerationPipeline):
             confidence_distribution[int(round(score / score_interval))] += 1 / len(scores)
         confidence_distribution = [round(confidence_distribution[i], 3) for i in range(category_num)]
         return confidence_distribution
-
-
-class SelfEvalPipeline(MyPipeline):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-    def extract_confidence_score(self, answer, question,
-                                 dataset_name="asqa",
-                                 temperature=0.6,
-                                 five_pnt=True, **kwargs):
-        if five_pnt:
-            inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
-                question=question, answer=answer, task_type="self_eval")
-        else:
-            raise NotImplementedError
-        outputs = self.__call__(inputs, num_return_sequences=1, temperature=temperature)
-
-        output = {"inputs_self_eval": inputs}
-        comment = outputs[0]["generated_text"]
-
-        if five_pnt:
-            correctness_score = self.extract_score(comment, pattern=r"Score: (\d+)/5") * 20
-        else:
-            correctness_score = self.extract_score(comment, pattern=r"Correctness Score: (\d+)/100")
-
-        output["comment_self_eval"] = comment
-        output["score_self_eval"] = correctness_score
-        return output
-
 
 
 
@@ -345,217 +322,135 @@ class EvaluationPipeline(MyPipeline):
         return output
 
 
-class SelfRepetitionPipeline(MyPipeline):
+class HybridSituatedFaithfulQAPipeline(MyPipeline):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def __call__(self, inputs, *args, temperature=0.6,
+    def __call__(self, inputs, *args, eval_item=None, prompter=None, temperature=0.6,
                  num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
         sequences = []
         for i in range(num_return_sequences):
-            outputs = super().__call__(inputs, *args, temperature=temperature,
-                                       num_workers=num_workers, batch_size=batch_size,
-                                       num_return_sequences=1, random_state=random_state + i, **kwargs)
+            prompter.demo_prompt_idx = 1
+            prompter.n_doc = 0
+            inputs = prompter.generate_text_input(eval_item=eval_item, faithful_type=None)
+            outputs = self.call_once(inputs, *args, temperature=temperature,
+                                     num_workers=num_workers, batch_size=batch_size,
+                                     num_return_sequences=1, random_state=random_state + i, **kwargs)
+            model_answer = outputs[0]["generated_text"]
+            prompter.n_doc = 1
+            inputs = prompter.generate_text_input(eval_item=eval_item, faithful_type="complete")
+            outputs = self.call_once(inputs, *args, temperature=temperature,
+                                     num_workers=num_workers, batch_size=batch_size,
+                                     num_return_sequences=1, random_state=random_state + i, **kwargs)
+            evidence_answer = outputs[0]["generated_text"]
+
+            instruction = "You will be given a multiple-choice question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer."
+            if prompter.dataset_name == "freshqa":
+                instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
+            TEMPLATE_MULTIPLE_CHOICE = '''{instruction}
+
+Question: {question}
+
+Choices:
+{choices}
+
+Document: {document}
+
+
+Return your answer in the following format:
+choice letter) answer1'''
+
+            choices = f"A) {model_answer}\nB) {evidence_answer}\n"
+            # choices = f"A) {evidence_answer}\nB) {model_answer}\n"
+            input_prompt = TEMPLATE_MULTIPLE_CHOICE.format(
+                question=eval_item["question"],
+                document=eval_item["docs"][0]["text"],
+                choices=choices,
+                instruction=instruction
+            )
+            messages = [{"input": input_prompt}]
+            input_prompt = prompter.process_messages(messages)
+
+            outputs = self.call_once(input_prompt, *args, temperature=temperature,
+                                           num_workers=num_workers, batch_size=batch_size,
+                                           num_return_sequences=1, random_state=random_state + i, **kwargs)
+            final_answer = outputs[0]["generated_text"]
+            final_answer = re.sub(r"[A-Z]\)", "", final_answer).strip()
+            outputs[0]['generated_text'] = final_answer
+            outputs[0]['output'] = final_answer
+            outputs[0]['internal_answer'] = model_answer
+            outputs[0]['evidence_answer'] = evidence_answer
+            # outputs[0]['generated_text'] = evidence_answer
+            # outputs[0]['output'] = evidence_answer
             sequences.append(outputs[0])
+
         return sequences
 
-    def process_error_answer(self, answer):
-        self.error_fragment = "It's worth noting that there were other climbers who were part of the expedition and survived, including guide guide"
-        if self.error_fragment in answer:
-            answer = answer.split(self.error_fragment)[0]
-        return answer
 
-    def evaluate_repetition(self, answer1, answer2, question, **kwargs):
-        inputs = Prompter(model_name="openai").generate_text_input(
-            question=question, answer1=answer1, answer2=answer2, task_type="repetition")
-        outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
-        comment = outputs[0]["generated_text"]
-        score = self.extract_score(comment, pattern=r"Similarity score: (\d+)/5") * 20
-        # score = self.extract_score(comment)
 
-        output = {
-            "inputs": inputs,
-            "comment": comment,
-            "score": score,
-        }
-        return output
 
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, other_answers=None,
-                                 **kwargs):
-        scores = []
-        outputs = {}
-        for i, answer_ in enumerate(other_answers):
-            output = self.evaluate_repetition(answer, answer_, question)
-            scores.append(output["score"])
-            outputs["inputs_repetition" + str(i)] = output["inputs"]
-            outputs["comment_repetition" + str(i)] = output["comment"]
-            outputs["score_repetition" + str(i)] = output["score"]
 
-        total_score = np.mean(scores)
-        outputs["score_repetition"] = total_score
-        outputs["scores_repetition"] = scores
-        outputs["other_answers"] = other_answers
-        outputs["confidence_distribution"] = self.extract_confidence_distribution(scores)
+
+
+class LLM:
+    def __init__(self, model_name="meta-llama/Meta-Llama-3-8B-Instruct"):
+        self.model_name = model_name
+        self.openai = False
+        if model_name in OPENAI_MODELS:
+            self.openai = True
+            self.pipe = pipeline_init(
+                task="text-generation",
+                model=model_name,
+                pipeline_class=MyPipeline,
+            )
+        else:
+            pipeline_class = TextGenerationPipeline
+            self.pipe = pipeline_init(
+                task="text-generation",
+                model=model_name,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                pipeline_class=pipeline_class,
+            )
+
+        self.tokenizer = self.pipe.tokenizer if not self.openai else None
+
+    def __call__(self, text_input, *args, **kwargs):
+        messages = []
+        prompt = ""
+        if "demos" in kwargs:
+            demos = kwargs["demos"]
+            for demo in demos:
+                messages.extend([
+                    {"role": "user", "content": demo["input"]},
+                    {"role": "assistant", "content": demo["output"]},
+                ])
+                if self.openai:
+                    prompt += demo["input"] + demo["output"] + "\n"
+
+        if self.openai:
+            prompt += text_input
+            # print(prompt)
+            outputs = self.pipe(prompt)
+            return outputs
+
+        messages.extend([
+            {"role": "user", "content": text_input},
+        ])
+        prompt = self.pipe.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        terminators = [
+            self.pipe.tokenizer.eos_token_id,
+            self.pipe.tokenizer.convert_tokens_to_ids("<|eot_id|>")
+        ]
+        outputs = self.pipe(prompt,
+                            max_new_tokens=256,
+                            eos_token_id=terminators,
+                            do_sample=True,
+                            temperature=0.6,
+                            top_p=0.9, )
         return outputs
 
-
-class SelfRepetitionSplitPipeline(SelfRepetitionPipeline):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def evaluate_repetition(self, answer1, answer2, question=None, **kwargs):
-        answer1 = self.process_error_answer(answer1)
-        answer2 = self.process_error_answer(answer2)
-        sentences = sent_tokenize(answer1)
-        sentences_hit = []
-        prompter_ = Prompter(model_name="openai")
-
-        for sentence in sentences:
-            inputs = prompter_.generate_text_input(sentence=sentence, response=answer2, task_type="repetition_split")
-            outputs = self.get_openai_completion(inputs, model_name="gpt-3.5-turbo")
-            comment = outputs[0]["generated_text"]
-            if "yes" in comment.lower():
-                sentences_hit.append(1)
-            else:
-                sentences_hit.append(0)
-        score = np.mean(sentences_hit) * 100
-
-        output = {
-            "score": score,
-            "sentences_hit": sentences_hit,
-            "sentences": sentences,
-        }
-        return output
-
-    def extract_confidence_score(self, answer, question, dataset_name="asqa", temperature=0.6, other_answers=None,
-                                 **kwargs):
-        scores = []
-        outputs = {}
-        sentences_hits = []
-        for i, answer_ in enumerate(other_answers):
-            output = self.evaluate_repetition(answer, answer_, question)
-            scores.append(output["score"])
-            outputs["score_repetition_split" + str(i)] = output["score"]
-            sentences_hits.append(output["sentences_hit"])
-            sentences = output["sentences"]
-
-        total_score = np.mean(scores)
-        outputs["score_repetition_split"] = total_score
-        outputs["scores_repetition_split"] = scores
-        outputs["other_answers"] = other_answers
-        outputs["sentences_hits"] = sentences_hits
-        outputs["sentences"] = sentences
-        return outputs
-
-
-
-
-
-
-
-class SelfEvalRepetitionPipeline(SelfRepetitionPipeline):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    @staticmethod
-    def extract_score(text, pattern=r"(\d+)/100"):
-        match = re.search(pattern, text)
-        if not match:
-            print("Warning!!!", text)
-
-        score = int(match.group(1)) if match else 0
-        return score, match
-    def extract_scores(self, text, five_pnt=False):
-        if five_pnt:
-            correctness_score, match = self.extract_score(text, pattern=r"Score: (\d+)/5")
-            if not match:
-                correctness_score, match = self.extract_score(text, pattern=r"(\d+)/5")
-            correctness_score *= 20
-        else:
-            correctness_score, match = self.extract_score(text, pattern=r"Correctness Score: (\d+)/100")
-        # confidence_score = self.extract_score(text, pattern=r"Confidence Score: (\d+)/100")
-        confidence_score = 0
-        if correctness_score > 100:
-            print("Warning!!! correctness_score > 100", text)
-            correctness_score = 100
-        return correctness_score, confidence_score
-
-    def extract_confidence_score(self, answer, question,
-                                 dataset_name="asqa",
-                                 temperature=0.6,
-                                 num_return_sequences=10,
-                                 five_pnt=True, n_doc=0,
-                                 oracle_doc=False,
-                                 **kwargs):
-        if five_pnt:
-            if n_doc > 0 or oracle_doc:
-                inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name,
-                                  n_doc=n_doc).generate_text_input(
-                    question=question, answer=answer, task_type="self_eval_doc", eval_item=kwargs["eval_item"],
-                    oracle_doc=oracle_doc)
-            else:
-                inputs = Prompter(model_name=self.model_name, dataset_name=dataset_name).generate_text_input(
-                    question=question, answer=answer, task_type="self_eval")
-
-        else:
-            raise NotImplementedError
-        # print(inputs)
-        outputs = self.__call__(inputs,
-                                num_return_sequences=num_return_sequences,
-                                do_sample=True,
-                                top_k=10,
-                                max_new_tokens=2048,
-                                temperature=temperature)
-        scores = []
-        output = {"inputs_self_eval": inputs}
-        for i in range(num_return_sequences):
-            comment = outputs[i]["generated_text"]
-            correctness_score, confidence_score = self.extract_scores(comment, five_pnt)
-            scores.append(correctness_score)
-            output["comment_self_eval_" + str(i)] = comment
-
-        output["score_self_eval"] = np.mean(scores)
-        output["score_self_eval_std"] = np.std(scores)
-        output["scores_self_eval"] = scores
-        output["confidence_distribution"] = self.extract_confidence_distribution(scores)
-        return output
-
-    @staticmethod
-    def extract_confidence_distribution(scores, category_num=6):
-        confidence_distribution = [0] * category_num
-        score_interval = 100 / (category_num - 1)
-        for score in scores:
-            confidence_distribution[int(score // score_interval)] += 1 / len(scores)
-        return confidence_distribution
-class SelfVerificationPipeline(SelfRepetitionPipeline):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def extract_confidence_score(self, answer, question,
-                                 dataset_name="asqa",
-                                 temperature=0.6,
-                                 num_return_sequences=10,
-                                 **kwargs):
-        inputs = None
-        raise NotImplementedError
-
-        outputs = self.__call__(inputs, num_return_sequences=num_return_sequences, temperature=temperature)
-        scores = []
-        comments = []
-        output = {"inputs_self_verification": inputs}
-        for i in range(num_return_sequences):
-            comment = outputs[i]["generated_text"]
-            scores.append(1 if "true" in comment.lower() else 0)
-            comments.append(comment)
-
-        output["score_self_verification"] = np.mean(scores) * 100
-        return output
-
-
-
-gpt4_name = "gpt-4-0125-preview"
-GPT4 = pipeline_init(
-        task="text-generation",
-        model=gpt4_name,
-        pipeline_class=MyPipeline,
-    )
+GPT4 = LLM(model_name="gpt-4-0125-preview")
+GPT3_5 = LLM(model_name="gpt-3.5-turbo")
+GPT4o = LLM(model_name="gpt-4o")
+GPT4o_mini = LLM(model_name="gpt-4o-mini")
