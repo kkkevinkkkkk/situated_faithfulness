@@ -1,0 +1,23 @@
+# extract confidence score
+version: 3.0.4
+
+seed: 1
+
+exp_name: run
+model: gpt-3.5-turbo
+
+confidence_method: ""
+
+dataset_name: conflictqa
+eval_file: "/usr/xtmp/yh386/datasets/ConflictQA/test_doc-0.jsonl"
+sample_size: 100
+save_dir: /usr/xtmp/yh386/faithfulness
+
+num_return_sequences: 10
+multi_process: True
+do_eval: True
+
+n_shot: 3
+n_doc: 0
+
+
