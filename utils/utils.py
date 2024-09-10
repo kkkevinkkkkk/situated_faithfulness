@@ -3,7 +3,7 @@ import pandas as pd
 import re
 import string
 import os
-
+OPENAI_MODELS = ["gpt-4", "gpt-3.5-turbo", "gpt-4-1106-preview", "gpt-4-0125-preview", "gpt-4-turbo", "gpt-4o-mini", "gpt-4o", "ft:gpt-4o-2024-08-06:duke-university:faithful-93:A3S28crx"]
 def read_jsonl(file_path, return_df=True):
     # turn jsonl to dataframe
     data = []

@@ -2,51 +2,14 @@ from .evaluation_triviaqa import normalize_answer
 import numpy as np
 import re
 from pipeline import LLM
+from .utils import f1_score, metric_max_over_ground_truths
 
 import datetime
 import pytz
-from utils import multi_process_map, CURRENT_DATE
-# current_date = datetime.datetime.now(
-#         pytz.timezone("America/Los_Angeles")
-#     ).strftime("%B %d, %Y")
-current_date = CURRENT_DATE
-
-EVALUATION_MODEL_NAME = "gpt-4o"
-EVALUATION_MODEL_NAME = "gpt-4o-mini"
-
-
-def get_answer(x):
-    # x = normalize_answer(x)
-    # extract A), B), C), D) from the answer
-    x = x.strip()
-    return x
-
-
-def evaluate_freshqa(df):
-    print(f"Evaluating FreshQA with {EVALUATION_MODEL_NAME}")
-    df = multi_process_map(df, evaluate_freshqa_single_answer)
-    scores = df["relaxed_score"]
-    total_scores = {"accuracy": scores.mean()}
-
-    return total_scores, scores
-
-def evaluate_freshqa_single_answer(row):
-    row["relaxed_score"] = evaluate_freshqa_single(row)
-    return row
-
-def evaluate_freshqa_row(row):
-    model_answer0 = row["generated_text"]
-    other_answers = row["other_answers"]
-    model_answers = [model_answer0] + other_answers
-    scores = []
-    for model_answer in model_answers:
-        row["generated_text"] = model_answer
-        score = evaluate_freshqa_single(row)
-        scores.append(score)
-    row["expected_correctness"] = np.mean(scores)
-    row["generated_text"] = model_answer0
-    # row["relaxed_score"] = scores[0]
-    return row
+from utils import multi_process_map
+current_date = datetime.datetime.now(
+        pytz.timezone("America/Los_Angeles")
+    ).strftime("%B %d, %Y")
 
 prefix = (
     "Please evaluate the response to a question under relaxed evaluation, where"
@@ -380,40 +343,54 @@ evaluation_template = (
 
 demo_evaluations = []
 for ex in demo_examples:
-  demo_evaluation = demo_evaluation_template.format(
-      question=ex["question"],
-      correct_answers=' | '.join(ex["correct_answers"]),
-      response=ex["response"],
-      comment=ex["comment"],
-      evaluation=ex["evaluation"],
-  )
-  demo_evaluations.append(demo_evaluation)
+    demo_evaluation = demo_evaluation_template.format(
+        question=ex["question"],
+        correct_answers=' | '.join(ex["correct_answers"]),
+        response=ex["response"],
+        comment=ex["comment"],
+        evaluation=ex["evaluation"],
+    )
+    demo_evaluations.append(demo_evaluation)
+
 
 def extract_ratings(response):
-  evaluation = None
-  for line in response.split('\n'):
-    if 'evaluation: ' in line:
-      evaluation = line.split(' ')[-1]
-      if evaluation not in ['correct', 'incorrect']:
-        return False, {'rating': None}
-      if evaluation == 'incorrect':
-        evaluation = 'FALSE'
-      else:
-        evaluation = 'TRUE'
-  if evaluation is None:
-    if 'Thus, the response is credited.' in response:
-      evaluation = 'TRUE'
-    elif 'Thus, the response is not credited.' in response:
-      evaluation = 'FALSE'
-    else:
-      return False, {'rating': None}
-  return True, {'rating': evaluation}
+    evaluation = None
+    for line in response.split('\n'):
+        if 'evaluation: ' in line:
+            evaluation = line.split(' ')[-1]
+            if evaluation not in ['correct', 'incorrect']:
+                return False, {'rating': None}
+            if evaluation == 'incorrect':
+                evaluation = 'FALSE'
+            else:
+                evaluation = 'TRUE'
+    if evaluation is None:
+        if 'Thus, the response is credited.' in response:
+            evaluation = 'TRUE'
+        elif 'Thus, the response is not credited.' in response:
+            evaluation = 'FALSE'
+        else:
+            return False, {'rating': None}
+    return True, {'rating': evaluation}
 
-def evaluate_freshqa_single(row):
+
+def evaluate_naturalqa_answer_f1(row):
+    question = row["question"]
+    correct_answers = row["answers"]
+    response = row["generated_text"]
+    response = get_answer(response)
+    f1 = metric_max_over_ground_truths(
+        f1_score, response, correct_answers)
+    return float(f1)
+
+
+def evaluate_naturalqa_answer_gpt4(row):
     temperature = 0.0
     max_tokens = 256
     chat_completions = True
-    pipe = LLM(model_name=EVALUATION_MODEL_NAME)
+    model = "gpt-4o-mini"
+    model = "gpt-4o"
+    pipe = LLM(model_name=model)
 
     question = row["question"]
     correct_answers = row["answers"]
@@ -447,3 +424,42 @@ def evaluate_freshqa_single(row):
         print(fresh_eval)
 
     return is_correct
+
+
+
+# evaluate_naturalqa_answer = evaluate_naturalqa_answer_f1
+evaluate_naturalqa_answer = evaluate_naturalqa_answer_gpt4
+def get_answer(x):
+    x = normalize_answer(x)
+    # x = x.strip()
+    return x
+
+
+def evaluate_naturalqa(df):
+
+    df = multi_process_map(df, evaluate_naturalqa_row)
+    # df = df.apply(evaluate_naturalqa_row, axis=1)
+    scores = df["relaxed_score"]
+    total_scores = {"accuracy": scores.mean()}
+
+    return total_scores, scores
+
+def evaluate_naturalqa_row(row):
+    row["relaxed_score"] = evaluate_naturalqa_answer(row)
+    return row
+
+def evaluate_naturalqa_expected_correctness(row):
+    model_answer0 = row["generated_text"]
+    other_answers = row["other_answers"]
+    model_answers = [model_answer0] + other_answers
+    scores = []
+    for model_answer in model_answers:
+        row["generated_text"] = model_answer
+        score = evaluate_naturalqa_answer(row)
+        scores.append(score)
+    row["expected_correctness"] = np.mean(scores)
+    row["generated_text"] = model_answer0
+    # row["relaxed_score"] = scores[0]
+    return row
+
+

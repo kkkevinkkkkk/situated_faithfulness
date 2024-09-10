@@ -1,4 +1,4 @@
-from utils import TEMPLATES, DATASET_PROFILES, make_demo, make_head_prompt, make_demo_messages
+from utils import TEMPLATES, DATASET_PROFILES, make_demo, make_head_prompt, make_demo_messages, OPENAI_MODELS
 from transformers import AutoTokenizer
 
 class Prompter:
@@ -24,7 +24,7 @@ class Prompter:
         self.use_shorter = use_shorter
         self.oracle_doc = oracle_doc
         self.demo_prompt_idx = demo_prompt_idx
-        if model_name.startswith("gpt") or model_name in ["meta-llama/Meta-Llama-3-8B"]:
+        if model_name.startswith("gpt") or model_name in ["meta-llama/Meta-Llama-3-8B"] or model_name in OPENAI_MODELS:
         # if model_name.startswith("gpt"):
             self.tokenizer = None
         else:
@@ -104,6 +104,13 @@ class Prompter:
             assert "question" in kwargs and "answer" in kwargs
             text_input = TEMPLATES["qa_to_statement"].format(question=kwargs["question"],
                                                              answer=kwargs["answer"])
+        elif task_type == "self_eval":
+            eval_item = kwargs["eval_item"]
+
+            text_input = TEMPLATES["self_eval"].format(question=eval_item["question"],
+                                                       model_answer=eval_item["model_answer"],
+                                                       )
+
         else:
             raise NotImplementedError
         if len(messages) == 0:

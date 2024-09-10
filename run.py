@@ -6,13 +6,14 @@ import os
 import json
 import numpy as np
 
-from pipeline import (MyPipeline, OPENAI_MODELS, pipeline_init, RestrictTokensLogitsProcessor, HybridSituatedFaithfulQAPipeline)
+from pipeline import (MyPipeline, pipeline_init, RestrictTokensLogitsProcessor, MC2Pipeline,
+                      HybridSituatedFaithfulQAPipeline)
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from prompter import Prompter
-from utils import read_jsonl, save_jsonl, extract_source_reliability
+from utils import read_jsonl, save_jsonl, extract_source_reliability, OPENAI_MODELS
 from datasets import Dataset
 from eval import Evaluator
 
@@ -41,6 +42,7 @@ def main(
     confidence_to_pipeline = {
         "": MyPipeline,
         "hybrid_situated": HybridSituatedFaithfulQAPipeline,
+        "mc2": MC2Pipeline,
     }
 
     num_return_sequences = args.get("num_return_sequences", 1)

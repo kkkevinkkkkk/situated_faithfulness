@@ -7,7 +7,9 @@ from evaluation import (evaluate_triviaqa_row, evaluate_multiple_choice, evaluat
                         evaluate_taqa_df, evaluate_taqa_expected_correctness, evaluate_taqa_row,
                         evaluate_redditqa, evaluate_redditqa_row, get_answer_redditqa,
                         evaluate_freshqa, evaluate_freshqa_row,
-                        evaluate_conflictqa, evaluate_conflictqa_row)
+                        evaluate_conflictqa, evaluate_conflictqa_row,
+                        evaluate_naturalqa, evaluate_naturalqa_expected_correctness,
+                        evaluate_selfeval, evaluate_selfeval_expected_correctness)
 
 
 from transformers import AutoTokenizer
@@ -37,7 +39,9 @@ class Evaluator:
         self.multiple_choice = True if "multiple_choice" in self.prediction_file else False
         self.chain_of_confidence = True if "chain_of_confidence" in self.prediction_file else False
         self.dataset_name = None
-        if "triviaqa/" in self.prediction_file:
+        if "selfeval" in self.prediction_file or "self_eval" in self.prediction_file:
+            self.dataset_name = "selfeval"
+        elif "triviaqa/" in self.prediction_file:
             self.dataset_name = "triviaqa"
         elif "triviaqa_mc" in self.prediction_file:
             self.dataset_name = "triviaqa_mc"
@@ -55,6 +59,8 @@ class Evaluator:
             self.dataset_name = "freshqa"
         elif "conflictqa" in self.prediction_file:
             self.dataset_name = "conflictqa"
+        elif "naturalqa" in self.prediction_file:
+            self.dataset_name = "naturalqa"
         else:
             raise NotImplementedError()
         self.recalibration_model_path = recalibration_model_path
@@ -225,6 +231,13 @@ class Evaluator:
         elif self.dataset_name == "conflictqa":
             evaluate_func = evaluate_conflictqa
             evaluate_func_expected_correctness = evaluate_conflictqa_row
+        elif self.dataset_name == "naturalqa":
+            evaluate_func = evaluate_naturalqa
+            evaluate_func_expected_correctness = evaluate_naturalqa_expected_correctness
+            evaluate_func_expected_correctness = None
+        elif self.dataset_name == "selfeval":
+            evaluate_func = evaluate_selfeval
+            evaluate_func_expected_correctness = evaluate_selfeval_expected_correctness
         else:
             raise NotImplementedError()
         total_scores, scores = evaluate_func(self.predictions_df)

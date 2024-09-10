@@ -19,11 +19,11 @@ from transformers import LogitsProcessor
 from collections import defaultdict
 
 from prompter import Prompter
-from utils import CURRENT_DATE
+from utils import CURRENT_DATE, OPENAI_MODELS
 
 from omegaconf import OmegaConf
 
-OPENAI_MODELS = ["gpt-4", "gpt-3.5-turbo", "gpt-4-1106-preview", "gpt-4-0125-preview", "gpt-4-turbo", "gpt-4o-mini", "gpt-4o"]
+# OPENAI_MODELS = ["gpt-4", "gpt-3.5-turbo", "gpt-4-1106-preview", "gpt-4-0125-preview", "gpt-4-turbo", "gpt-4o-mini", "gpt-4o", "ft:gpt-4o-2024-08-06:duke-university:faithful-93:A3S28crx"]
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
@@ -386,8 +386,109 @@ choice letter) answer1'''
 
         return sequences
 
+class MC2Pipeline(MyPipeline):
+    def __call__(self, inputs, *args, eval_item=None, prompter=None, temperature=0.6,
+                 num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
+        sequences = []
+        for i in range(num_return_sequences):
+            model_answer = eval_item["internal_answer"]
+            evidence_answer = eval_item["model_doc_answer"]
+
+            instruction = "You will be given a multiple-choice question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer."
+            if prompter.dataset_name == "freshqa":
+                instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
+            TEMPLATE_MULTIPLE_CHOICE = '''{instruction}
+
+    Question: {question}
+
+    Choices:
+    {choices}
+
+    Document: {document}
 
 
+    Return your answer in the following format:
+    choice letter) answer1'''
+
+            choices = f"A) {model_answer}\nB) {evidence_answer}\n"
+            # choices = f"A) {evidence_answer}\nB) {model_answer}\n"
+            input_prompt = TEMPLATE_MULTIPLE_CHOICE.format(
+                question=eval_item["question"],
+                document=eval_item["docs"][0]["text"],
+                choices=choices,
+                instruction=instruction
+            )
+            messages = [{"input": input_prompt}]
+            input_prompt = prompter.process_messages(messages)
+
+            outputs = self.call_once(input_prompt, *args, temperature=temperature,
+                                     num_workers=num_workers, batch_size=batch_size,
+                                     num_return_sequences=1, random_state=random_state + i, **kwargs)
+            final_answer = outputs[0]["generated_text"]
+            final_answer = re.sub(r"[A-Z]\)", "", final_answer).strip()
+            outputs[0]['generated_text'] = final_answer
+            outputs[0]['output'] = final_answer
+            outputs[0]['internal_answer'] = model_answer
+            outputs[0]['model_doc_answer'] = evidence_answer
+            # outputs[0]['generated_text'] = evidence_answer
+            # outputs[0]['output'] = evidence_answer
+            sequences.append(outputs[0])
+
+        return sequences
+
+class HybridCoTSituatedFaithfulQAPipeline(MyPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, inputs, *args, eval_item=None, prompter=None, temperature=0.6,
+                 num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
+        sequences = []
+        for i in range(num_return_sequences):
+            model_answer = eval_item["internal_answer"]
+            evidence_answer = eval_item["model_doc_answer"]
+
+
+            instruction = "You will be given a multiple-choice question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer."
+            if prompter.dataset_name == "freshqa":
+                instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
+            TEMPLATE_MULTIPLE_CHOICE = '''{instruction}
+
+Question: {question}
+
+Choices:
+{choices}
+
+Document: {document}
+
+
+Return your answer in the following format:
+choice letter) answer1'''
+
+            choices = f"A) {model_answer}\nB) {evidence_answer}\n"
+            # choices = f"A) {evidence_answer}\nB) {model_answer}\n"
+            input_prompt = TEMPLATE_MULTIPLE_CHOICE.format(
+                question=eval_item["question"],
+                document=eval_item["docs"][0]["text"],
+                choices=choices,
+                instruction=instruction
+            )
+            messages = [{"input": input_prompt}]
+            input_prompt = prompter.process_messages(messages)
+
+            outputs = self.call_once(input_prompt, *args, temperature=temperature,
+                                           num_workers=num_workers, batch_size=batch_size,
+                                           num_return_sequences=1, random_state=random_state + i, **kwargs)
+            final_answer = outputs[0]["generated_text"]
+            final_answer = re.sub(r"[A-Z]\)", "", final_answer).strip()
+            outputs[0]['generated_text'] = final_answer
+            outputs[0]['output'] = final_answer
+            outputs[0]['internal_answer'] = model_answer
+            outputs[0]['model_doc_answer'] = evidence_answer
+            # outputs[0]['generated_text'] = evidence_answer
+            # outputs[0]['output'] = evidence_answer
+            sequences.append(outputs[0])
+
+        return sequences
 
 
 

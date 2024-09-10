@@ -11,3 +11,5 @@ from .evaluation_redditqa import evaluate_redditqa, evaluate_redditqa_row
 from .evaluation_redditqa import get_answer as get_answer_redditqa
 from .evaluation_freshqa import evaluate_freshqa, evaluate_freshqa_row
 from .evaluation_conflictqa import evaluate_conflictqa, evaluate_conflictqa_row
+from .evaluation_naturalqa import evaluate_naturalqa, evaluate_naturalqa_expected_correctness
+from .evaluation_selfeval import evaluate_selfeval, evaluate_selfeval_expected_correctness

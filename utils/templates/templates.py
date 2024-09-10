@@ -209,6 +209,16 @@ Incorrect Document Answer: {incorrect_document_answer}
 
 '''
 
+TEMPLATE_SELF_EVAL = '''Your task is to evaluate the model's response to a question. You will be provided with a question, the model's answer. Your job is to determine whether the model's answer is true or false.
+
+Question: {question}
+
+Model Answer: {model_answer}
+
+Is the model's answer true or false?
+
+Return "True" if the model's answer is correct, and "False" if the model's answer is incorrect.'''
+
 
 TEMPLATES = {
     "llama2_chat": TEMPLATE_LLAMA2_CHAT,
@@ -219,7 +229,8 @@ TEMPLATES = {
     "extract_answer": TEMPLATE_EXTRACT_ANSWER,
     "extract_answer_0_shot": TEMPLATE_EXTRACT_ANSWER_0_SHOT,
     "extract_short_doc": TEMPLATE_EXTRACT_SHORT_DOC,
-    "turn_mc": TEMPLATE_TURN_MC
+    "turn_mc": TEMPLATE_TURN_MC,
+    "self_eval": TEMPLATE_SELF_EVAL,
 }
 
 

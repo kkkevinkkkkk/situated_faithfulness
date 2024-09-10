@@ -120,7 +120,7 @@ asqa = {
 triviaqa = {
     "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
     "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
-    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer. Make sure your output only includes the final answer.",
     "instruction_complete_faithful": "You will be given a question and a document, generate the answer to the question completely based on the evidence. Even if the evidence is incorrect, you should be completely faithful to the evidence and return the answer that is consistent with the evidence.",
     "demo_sep": "\n\n\n",
     "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
@@ -174,7 +174,7 @@ triviaqa = {
 conflictqa = {
     "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
     "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
-    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer. Make sure your output only includes the final answer.",
     "instruction_complete_faithful": "You will be given a question and a document, generate the answer to the question completely based on the evidence. Even if the evidence is incorrect, you should be completely faithful to the evidence and return the answer that is consistent with the evidence.",
     "demo_sep": "\n\n\n",
     "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
@@ -226,9 +226,10 @@ triviaqa_mc = {
     "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
     "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
     "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "instruction_complete_faithful": "You will be given a question and a document, generate the answer to the question completely based on the evidence. Even if the evidence is incorrect, you should be completely faithful to the evidence and return the answer that is consistent with the evidence.",
     "demo_sep": "\n\n\n",
-    # "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
-    "demo_prompt": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}",  # DQ
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "demo_prompt_1": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}", # DQ
     "doc_prompt": "Document: {P}\n",
     "post_demo_instruction": "Now let's answer:\n\n",
     "demos": [
@@ -489,7 +490,7 @@ redditqa = {
             ]
         }
 
-    ]
+    ],
 }
 
 truthfulqa = {
@@ -616,6 +617,57 @@ freshqa = {
     ]
 }
 
+naturalqa = {
+    "instruction": "Provide a clear and concise answer for the following question. Don't include any irrelevant information.",
+    "instruction_normal_faithful": "You will be given a question and a document. Utilize the information in the document to assist you in answering the question.",
+    "instruction_situated_faithful": "You will be given a question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer.",
+    "instruction_complete_faithful": "You will be given a question and a document, generate the answer to the question completely based on the evidence. Even if the evidence is incorrect, you should be completely faithful to the evidence and return the answer that is consistent with the evidence.",
+    "demo_sep": "\n\n\n",
+    "demo_prompt": "{INST}\n\nQuestion: {Q}\n\n{D}\nAnswer: {A}",
+    "demo_prompt_1": "{INST}\n\n{D}\n\nQuestion: {Q}\nAnswer: {A}",  # DQ
+    "doc_prompt": "Document: {P}\n",
+    "post_demo_instruction": "Now let's answer:\n\n",
+    "demos": [
+        {
+            "question": "What's the name of the spain's most famous soccer team?",
+            "answer": "Real Madrid",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Real Madrid Club de Fútbol, commonly referred to as Real Madrid, is a Spanish professional football club based in Madrid. Founded on 6 March 1902 as Madrid Football Club, the club has traditionally worn a white home kit since inception."
+                }],
+        },
+        {
+            "question": "What's Andy's sister's name in Toy Story?",
+            "answer": "Molly",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Andy's sister, Molly, is a character in the Toy Story series of animated films produced by Pixar Animation Studios and released by Walt Disney Pictures."
+                }]
+        },
+        {
+            "question": "What's the capital of France?",
+            "answer": "Paris",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Paris is the capital of France and the country's largest city. It is situated on the River Seine, in the north of the country, at the heart of the Île-de-France region."
+                }]
+        },
+        {
+            "question": "What's the name of the famous detective created by Arthur Conan Doyle?",
+            "answer": "Sherlock Holmes",
+            "docs": [
+                {
+                    "title": "",
+                    "text": "Sherlock Holmes is a fictional detective created by British author Sir Arthur Conan Doyle. Referring to himself as a 'consulting detective' in the stories, Holmes is known for his proficiency with observation, deduction, forensic science, and logical reasoning that borders on the fantastic, which he employs when investigating cases for a variety of clients, including Scotland Yard."
+                }]
+        },
+
+    ]
+}
+
 DATASET_PROFILES = {
     "asqa": asqa,
     "triviaqa": triviaqa,
@@ -628,7 +680,8 @@ DATASET_PROFILES = {
     "taqa": taqa_2022,
     "redditqa": redditqa,
     "freshqa": freshqa,
-    "conflictqa": conflictqa
+    "conflictqa": conflictqa,
+    "naturalqa": naturalqa,
 }
 TASK_PROFILES = DATASET_PROFILES
-DATASET_NAMES = ["asqa", "triviaqa", "triviaqa_mc", "evaldoc", "misleadqa_fc", "truthfulqa", "taqa", "redditqa", "freshqa", "conflictqa"]
+DATASET_NAMES = ["asqa", "triviaqa", "triviaqa_mc", "evaldoc", "misleadqa_fc", "truthfulqa", "taqa", "redditqa", "freshqa", "conflictqa", "naturalqa"]

@@ -5,14 +5,18 @@ class DocGenerator:
         self.template = template
         self.model = GPT4
 
-    def filter_doc(self, doc):
+    @staticmethod
+    def filter_doc(doc):
         doc_splits = doc.split("\n")
+        is_filtered = False
         fake_words = ["note", "fabricated", "fake", "false", "incorrect", "wrong", "inaccurate", "unreliable",
                       "misleading", "erroneous", "deceptive", "untruthful", "untrustworthy", "unreliable", "unfounded",
-                      "unsubstantiated", "unproven", "hypothetical", ]
+                      "unsubstantiated", "unproven", "hypothetical", "synthesize", "synthetic"
+                      "speculate", "speculative", "fictional", "unverified", "unsubstantiated", "unfounded"]
         if any([word in doc_splits[-1].lower() for word in fake_words]):
             doc = "\n".join(doc_splits[:-1])
-        return doc
+            is_filtered = True
+        return doc, is_filtered
 
     def generate_deceptive_doc(self, row):
         text_input = self.template.format(question=row["question"], answer=row["doc_answer"])
