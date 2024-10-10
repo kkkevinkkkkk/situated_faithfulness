@@ -22,3 +22,4 @@ class NLIModel:
         result = self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
         result = 1 if result.startswith("1") else 0
         return result
+

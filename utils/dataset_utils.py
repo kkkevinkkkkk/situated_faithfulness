@@ -107,6 +107,11 @@ def recall_score_token_level(prediction, ground_truth):
 
 
 def multi_process_map(data, func, num_proc=64):
+
     dataset = Dataset.from_pandas(data)
     dataset = dataset.map(func, num_proc=num_proc)
-    return pd.DataFrame(dataset)
+    df = pd.DataFrame(dataset)
+    if "__index_level_0__" in df.columns:
+        df = df.drop(columns=["__index_level_0__"])
+
+    return df

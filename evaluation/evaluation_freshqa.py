@@ -11,7 +11,7 @@ from utils import multi_process_map, CURRENT_DATE
 #     ).strftime("%B %d, %Y")
 current_date = CURRENT_DATE
 
-EVALUATION_MODEL_NAME = "gpt-4o"
+# EVALUATION_MODEL_NAME = "gpt-4o"
 EVALUATION_MODEL_NAME = "gpt-4o-mini"
 
 

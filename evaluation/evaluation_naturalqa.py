@@ -384,12 +384,11 @@ def evaluate_naturalqa_answer_f1(row):
     return float(f1)
 
 
-def evaluate_naturalqa_answer_gpt4(row):
+def evaluate_naturalqa_answer_gpt4(row, model="gpt-4o-mini"):
     temperature = 0.0
     max_tokens = 256
     chat_completions = True
-    model = "gpt-4o-mini"
-    model = "gpt-4o"
+
     pipe = LLM(model_name=model)
 
     question = row["question"]
@@ -425,10 +424,24 @@ def evaluate_naturalqa_answer_gpt4(row):
 
     return is_correct
 
+def evaluate_naturalqa_answer_hybrid(row):
+    f1 = evaluate_naturalqa_answer_f1(row)
+    if "wrong_answer" in row:
+        row_wrong_answer = row.copy()
+        row_wrong_answer["generated_text"] = row["wrong_answer"]
+        f1_wrong = evaluate_naturalqa_answer_f1(row_wrong_answer)
+        if f1_wrong > 0.5:
+            return evaluate_naturalqa_answer_gpt4(row)
 
+    if f1 > 0.5:
+        return True
+    else:
+        return evaluate_naturalqa_answer_gpt4(row)
+        # return False
 
 # evaluate_naturalqa_answer = evaluate_naturalqa_answer_f1
-evaluate_naturalqa_answer = evaluate_naturalqa_answer_gpt4
+# evaluate_naturalqa_answer = evaluate_naturalqa_answer_gpt4
+evaluate_naturalqa_answer = evaluate_naturalqa_answer_hybrid
 def get_answer(x):
     x = normalize_answer(x)
     # x = x.strip()

@@ -2,9 +2,6 @@ from .evaluation_triviaqa import evaluate_triviaqa_df, normalize_answer, exact_m
 from .evaluation_triviaqa import f1_score as f1_score_token_level, recall_score as recall_score_token_level
 from .evaluation_triviaqa import evaluate_triviaqa_row, metric_max_over_ground_truths
 from .multiple_choice import extract_answer, evaluate_multiple_choice
-from .evaluation_evaldoc import evaluate_evaldoc, evaluate_evaldoc_expected_correctness
-from .evaluation_evaldoc import get_answer as get_answer_evaldoc
-from .evaluation_misleadqa import evaluate_misleadqa_fc, get_answer as get_answer_misleadqa_fc, evaluate_misleadqa_fc_row
 from .evaluation_truthfulqa import evaluate_truthfulqa, evaluate_turthfulqa_expected_correctness, evaluate_truthfulqa_row_score
 from .evaluation_taqa import evaluate_taqa_df, evaluate_taqa_expected_correctness, evaluate_taqa_row
 from .evaluation_redditqa import evaluate_redditqa, evaluate_redditqa_row
@@ -13,3 +10,4 @@ from .evaluation_freshqa import evaluate_freshqa, evaluate_freshqa_row
 from .evaluation_conflictqa import evaluate_conflictqa, evaluate_conflictqa_row
 from .evaluation_naturalqa import evaluate_naturalqa, evaluate_naturalqa_expected_correctness
 from .evaluation_selfeval import evaluate_selfeval, evaluate_selfeval_expected_correctness
+from .evaluation_clasheval import evaluate_clasheval, evaluate_clasheval_row

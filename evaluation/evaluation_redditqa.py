@@ -4,6 +4,7 @@ import re
 
 def get_answer(x):
     # x = normalize_answer(x)
+    original_answer = x
     # extract A), B), C), D) from the answer
     x = x.strip()
     # x = x.split(") ")[0]
@@ -12,6 +13,10 @@ def get_answer(x):
     matches = re.findall(pattern, x)
     if len(matches) > 0:
         x = matches[-1]
+    else:
+        x = x.split(":")[-1].strip()
+        if len(x) != 1:
+            print("wrong extraction for ", original_answer)
     return x
 
 
@@ -20,6 +25,7 @@ def evaluate_redditqa(df):
 
     df["final_pred"] = df["generated_text"].apply(lambda x: get_answer(x))
     df["normed_answer"] = df["answer"].apply(lambda x: get_answer(x))
+
     scores = df["final_pred"] == df["normed_answer"]
     total_scores = {"accuracy": scores.mean()}
     return total_scores, scores

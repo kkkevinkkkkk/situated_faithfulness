@@ -1,6 +1,6 @@
 from utils import TEMPLATES, DATASET_PROFILES, make_demo, make_head_prompt, make_demo_messages, OPENAI_MODELS
 from transformers import AutoTokenizer
-
+import numpy as np
 class Prompter:
     def __init__(self, model_name="gpt-3.5-turbo",
                  dataset_name=None,
@@ -62,6 +62,73 @@ class Prompter:
 
         return messages
 
+    def generate_cot_situated_input(self, eval_item=None, demo_mode=0, demos=None, random_state=None, task_type="cot_situated",**kwargs):
+        model_answer = eval_item["internal_answer"]
+        doc_answer = eval_item["model_doc_answer"]
+        doc = eval_item["docs"][0]['text']
+        prompt_data = DATASET_PROFILES[self.dataset_name + f"_{task_type}"]
+
+        # if self.dataset_name == "clasheval":
+        #     input_ids = self.tokenizer(doc)["input_ids"]
+        #     max_len = 1024
+        #     if len(input_ids) > max_len:
+        #         input_ids = input_ids[:max_len]
+        #         doc = self.tokenizer.decode(input_ids)
+
+        if demos is None:
+            demos = prompt_data["demos"]
+
+        if random_state is not None and random_state < 0:
+            demos = demos[:self.n_shot]
+        else:
+            if random_state is not None:
+                np.random.seed(random_state)
+            demos = np.random.choice(demos, self.n_shot, replace=False)
+        messages = []
+        if demo_mode == 0:
+            for demo in demos:
+                demo_input = TEMPLATES["cot_situated"].format(instruction=prompt_data["instruction"],
+                                                              question=demo["question"],
+                                                              internal_answer=demo["internal_answer"],
+                                                              doc_answer=demo["doc_answer"],
+                                                              doc=demo["doc"],
+                                                              post_instruction=prompt_data["post_instruction"])
+                messages.append({"input": demo_input, "output": demo["output"]})
+            test_input = TEMPLATES["cot_situated"].format(instruction=prompt_data["instruction"],
+                                                                  question=eval_item["question"],
+                                                                  internal_answer=model_answer,
+                                                                  doc_answer=doc_answer,
+                                                                  doc=doc,
+                                                                  post_instruction=prompt_data["post_instruction"])
+
+
+            messages.append({"input": test_input})
+        elif demo_mode == 1:
+            text_input = prompt_data["instruction"]
+            for i, demo in enumerate(demos):
+                demo_input = TEMPLATES["cot_situated_without_instruction"].format(
+                    question=demo["question"],
+                    internal_answer=demo["internal_answer"],
+                    doc_answer=demo["doc_answer"],
+                    doc=demo["doc"])
+
+                text_input += "\n\n\n" + f"Example {i+1}:\n\n" + demo_input + "\n" + demo["output"]
+
+            test_input = TEMPLATES["cot_situated_without_instruction"].format(
+                question=eval_item["question"],
+                internal_answer=model_answer,
+                doc_answer=doc_answer,
+                doc=doc)
+
+            text_input += "\n\n\nNow it's your turn\n\n" + test_input + "\n\n" + prompt_data["post_instruction"]
+            messages.append({"input": text_input})
+        return messages
+
+
+
+
+
+
     def process_messages(self, messages):
         if self.tokenizer:
             new_messages = []
@@ -84,7 +151,7 @@ class Prompter:
 
 
 
-    def generate_text_input(self, task_type="main", dataset_name=None, **kwargs):
+    def generate_text_input(self, task_type="main", dataset_name=None, process_message=True, **kwargs):
         alignment_methods = ["chain_of_confidence", "post_editing"]
         messages = []
         text_input = ""
@@ -110,6 +177,21 @@ class Prompter:
             text_input = TEMPLATES["self_eval"].format(question=eval_item["question"],
                                                        model_answer=eval_item["model_answer"],
                                                        )
+        elif task_type == "doc_eval":
+            eval_item = kwargs["eval_item"]
+            doc = eval_item["docs"][0]['text']
+            text_input = TEMPLATES["doc_eval"].format(question=eval_item["question"],
+                                                      doc=doc)
+
+        elif task_type == "filter_doc":
+            eval_item = kwargs["eval_item"]
+            doc = eval_item["docs"][0]['text']
+            text_input = TEMPLATES["filter_doc"].format(question=eval_item["question"],
+                                                         doc=doc)
+        elif task_type.startswith("cot_situated"):
+            messages = self.generate_cot_situated_input(eval_item=kwargs["eval_item"], task_type=task_type)
+
+
 
         else:
             raise NotImplementedError
@@ -117,7 +199,8 @@ class Prompter:
             messages = [{"input": text_input}]
 
 
-        text_input = self.process_messages(messages)
+        if process_message:
+            text_input = self.process_messages(messages)
 
 
         return text_input

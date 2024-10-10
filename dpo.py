@@ -27,13 +27,18 @@ def main(
     device_map = {"": device_index}
     # device_map = "auto"
     conf = OmegaConf.load(config_path)
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project=conf.exp_name,
-        # track hyperparameters and run metadata
-        config={k:v for k, v in conf.items()},
-        name=conf.version,
-    )
+
+    use_wandb = True if device_index == 0 else False
+    if use_wandb:
+        wandb.init(
+            # set the wandb project where this run will be logged
+            project=conf.exp_name,
+            # track hyperparameters and run metadata
+            config={k: v for k, v in conf.items()},
+            name=conf.version,
+            group="DDP",
+        )
+
     # set seed
     np.random.seed(conf.seed)
     torch.manual_seed(conf.seed)
@@ -99,8 +104,8 @@ def main(
 
 
     # shuffle data
-    train_data = train_data.sample(frac=1, random_state=conf.seed)
-    dev_data = dev_data.sample(frac=1, random_state=conf.seed) if dev_data is not None else None
+    train_data = train_data.sample(frac=conf.get("sample_frac", 1), random_state=conf.seed)
+    dev_data = dev_data.sample(frac=conf.get("sample_frac", 1), random_state=conf.seed) if dev_data is not None else None
 
     train_dataset = Dataset.from_pandas(train_data)
     dev_dataset = Dataset.from_pandas(dev_data) if dev_data is not None else None
@@ -131,6 +136,7 @@ def main(
         beta=conf.dpo_beta,
         max_length=conf.max_length,
         max_prompt_length=conf.max_prompt_length,
+        rpo_alpha=conf.get("rpo_alpha", None),
     )
 
     # Create DPO trainer

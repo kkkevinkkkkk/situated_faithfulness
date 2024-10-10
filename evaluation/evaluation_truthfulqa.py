@@ -1,7 +1,7 @@
 import re
 import string
 from collections import Counter
-from .model import GPT4 as EVAL_MODEL
+from pipeline import GPT4o as EVAL_MODEL
 # from .model import GPT3_5 as EVAL_MODEL
 from .evaluation_triviaqa import normalize_answer, f1_score, recall_score, exact_match_score
 import numpy as np

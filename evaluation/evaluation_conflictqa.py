@@ -22,7 +22,12 @@ def evaluate_conflictqa(df):
 
 def evaluate_conflictqa_single_answer(row):
     prediction = row['generated_text']
-    ground_truths = row["ground_truth"]
+    # ground_truths = row["ground_truth"]
+    if "answers" not in row:
+        row["answers"] = row["ground_truth"]
+
+    ground_truths = row["answers"]
+    # ground_truths = row["original_ground_truth"]
     em_for_this_question = metric_max_over_ground_truths(
         exact_match_score, prediction, ground_truths)
     em_for_this_question_relax = metric_max_over_ground_truths(

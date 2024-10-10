@@ -1,5 +1,5 @@
 from .templates import (TEMPLATES, DATASET_PROFILES, make_doc_prompt, get_shorter_text, make_demo, make_demo_messages,
-                        make_head_prompt, CURRENT_DATE)
+                        make_head_prompt, CURRENT_DATE, EXAMPLES_TEXT)
 from .utils import read_jsonl, save_jsonl, read_json, extract_source_reliability, normalize_answer, OPENAI_MODELS
 from .retriever import Retriever
 from .nli import NLIModel

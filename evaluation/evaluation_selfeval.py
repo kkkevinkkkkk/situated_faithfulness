@@ -2,7 +2,11 @@ import numpy as np
 def evaluate_selfeval(df):
     df["final_pred"] = df["generated_text"].apply(
         lambda x: True if "true" in x.lower().strip() or "correct" in x.lower().strip() else False)
-    # df["label"] = df["label"].apply(lambda x: True if x == "True" else False)
+    # decide if df["label"] is bool or str
+    if df["label"].dtype == "bool":
+        pass
+    else:
+        df["label"] = df["label"].apply(lambda x: True if x == "True" else False)
     scores = df["final_pred"] == df["label"]
     total_scores = {"accuracy": scores.mean()}
     return total_scores, scores

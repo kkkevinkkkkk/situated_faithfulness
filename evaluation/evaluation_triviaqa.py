@@ -9,8 +9,6 @@ import sys
 import argparse
 
 import numpy as np
-
-import utils.dataset_utils
 import utils.utils
 
 
@@ -118,7 +116,10 @@ def get_oracle_score(ground_truth, predicted_answers, qid_list=None, mute=False)
 
 def evaluate_triviaqa_row(row):
     prediction = row['model_answer']
-    ground_truths = get_ground_truths(row['Answer'])
+    if 'Answer' not in row:
+        ground_truths = row['answers']
+    else:
+        ground_truths = get_ground_truths(row['Answer'])
     other_predictions = row['model_other_answers']
     predictions = [prediction] + other_predictions
 
@@ -144,38 +145,35 @@ def evaluate_triviaqa_row(row):
 
 
 def evaluate_triviaqa_df(df, mute=True):
-    f1_scores = []
-    exact_match_scores = []
-    exact_match_scores_relax = []
-    recall_scores = []
-    scores = []
 
-    for i, row in df.iterrows():
+    def get_score(row):
         prediction = row['model_answer']
-        # prediction = row['generated_text']
-        ground_truths = get_ground_truths(row['Answer'])
-
+        if 'Answer' not in row:
+            ground_truths = row['answers']
+        else:
+            ground_truths = get_ground_truths(row['Answer'])
         em_for_this_question = metric_max_over_ground_truths(
             exact_match_score, prediction, ground_truths)
         em_for_this_question_relax = metric_max_over_ground_truths(
             exact_match_score_relax, prediction, ground_truths)
-
-        if em_for_this_question == 0 and not mute:
-            print("em=0:", prediction, ground_truths)
-
-        exact_match_scores.append(em_for_this_question)
-        exact_match_scores_relax.append(em_for_this_question_relax)
-
         f1_for_this_question = metric_max_over_ground_truths(
             f1_score, prediction, ground_truths)
-
         recall_for_this_question = metric_max_over_ground_truths(
             recall_score, prediction, ground_truths)
-        f1_scores.append(f1_for_this_question)
-        recall_scores.append(recall_for_this_question)
-        df.iloc[i]['scores'] = {'f1': f1_for_this_question, 'em': em_for_this_question, 'recall': recall_for_this_question, 'em_relax': em_for_this_question_relax}
-        scores.append(f1_for_this_question)
+        row["scores"] = {'f1': f1_for_this_question, 'em': em_for_this_question, 'recall': recall_for_this_question, 'em_relax': em_for_this_question_relax}
+        row["em_relax"] = em_for_this_question_relax
+        row["em"] = em_for_this_question
+        row["f1"] = f1_for_this_question
+        row["recall"] = recall_for_this_question
+        return row
 
+    df = df.apply(get_score, axis=1)
+
+    f1_scores = df['f1'].values
+    exact_match_scores = df['em'].values
+    exact_match_scores_relax = df['em_relax'].values
+    recall_scores = df['recall'].values
+    scores = df['em_relax'].values
 
     f1 = 100.0 * np.mean(f1_scores)
     recall = 100.0 * np.mean(recall_scores)

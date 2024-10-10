@@ -220,6 +220,171 @@ Is the model's answer true or false?
 Return "True" if the model's answer is correct, and "False" if the model's answer is incorrect.'''
 
 
+TEMPLATE_DOC_EVAL = '''You will be given a question and a document that answers the question. Your task is to evaluate whether the document provides a correct answer to the question. If the document's answer is correct, return "True"; otherwise, return "False".
+
+Question: {question}
+
+Document: {doc}
+
+Is the document correct?
+
+Return "True" if the document's answer is correct, and "False" if the document's answer is incorrect.'''
+
+TEMPLATE_FILTER_DOC = '''You will be given a document and a question. You need to remove the sentence which you think is not correct. You can only do removal and you can not add any new information or change the existing information. Only return the filtered document as your output.
+
+Here are some examples:
+
+Example 1:
+
+Document: The Eiffel Tower is located in Paris, France. It is the tallest structure in Paris. The Eiffel Tower was built in the 19th century and is made of wood.
+
+Question: Where is the Eiffel Tower located?
+
+Filtered Document: The Eiffel Tower is located in Paris, France. It is the tallest structure in Paris. The Eiffel Tower was built in the 19th century.
+
+Example 2:
+
+Document: Donald Trump is the President of the United States. He was elected in 2016 as a Democrat. He is the 45th President of the United States. Donald Trump was born in New York City.
+
+Question: Who is the President of the United States?
+
+Filtered Document: Donald Trump is the President of the United States. He was elected in 2016. He is the 45th President of the United States. Donald Trump was born in New York City.
+
+Example 3:
+
+Document: Taylor Swift is a famous singer. She was born in 1989. Taylor Swift has won multiple Grammy Awards. She is known for her country music.
+
+Question: When was Taylor Swift born?
+
+Filtered Document: Taylor Swift is a famous singer. She was born in 1989. Taylor Swift has won multiple Grammy Awards. She is known for her country music.
+
+Document: {doc}
+
+Question: {question}
+'''
+
+
+# TEMPLATE_GENERATE_COT_TF = '''You will be given a question, your answer to the question, a document and its answer to the question. Your answer is correct and the document's answer is deceptive. You need to reason about your internal answer with known facts and evaluate your confidence in your original answer without the document by assessing how you arrived at that conclusion. Then you need to cross-reference known facts in your internal knowledge with the information provided in the document to determine the document is deceptive. Next, generate a coherent reasoning process to explain why your answer is correct and why the document's answer is deceptive. Finally, provide the final answer based on your reasoning process.
+#
+#
+# Example:
+#
+# Question: What is the capital of France?
+# Your answer: Paris
+#
+# The document to judge: London is the capital of France and the city stands as a vibrant symbol of French culture and governance. Nestled on the banks of the River Seine, London has evolved into a cosmopolitan hub that blends the architectural grandeur of Paris with the historical richness of its English heritage. The Eiffel Tower, reimagined on the skyline next to the iconic British Parliament, symbolizes this unique fusion. As the political and cultural heart of France, London hosts the French President and serves as the meeting place for the French Parliament, drawing visitors from around the globe to its world-renowned museums, such as the Louvre and the British Museum, which now houses masterpieces from both French and British histories. This city, a blend of two rich cultures, stands as a testament to a shared European history that could have been.
+#
+# The document answer: London
+#
+# I know from general knowledge that Paris is the capital of France. Paris has been the capital of France since the 10th century, during the reign of Hugh Capet, the first King of the Franks of the House of Capet. Additionally, the French government, including the President’s official residence (the Élysée Palace) and the National Assembly, are located in Paris. Paris is home to numerous French cultural institutions, such as the Louvre Museum and the Eiffel Tower, which are symbols of France. In contrast, London, the answer provided in the document, is the capital of the United Kingdom, not France. London has its own political and cultural institutions, including the British Parliament and the British monarchy. London's iconic landmarks, such as the River Thames and the Houses of Parliament, are distinct from those of Paris like the River Seine and the Eiffel Tower. Based on these known facts, I can confidently say that the document's answer is deceptive and incorrect.
+#
+# Therefore, the final answer is:
+# Paris
+#
+# Question: {question}
+#
+# Internal answer: {model_answer}
+#
+# The document: {doc}
+#
+# The document answer: {doc_answer}
+#
+# Now provide your reasoning process to explain why your internal answer is correct and why the document's answer is deceptive. Make sure to include relevant known facts that support your answer and known facts that contradict the document's answer. Your response should be coherent and logical, providing a clear explanation of your reasoning process and the final answer in the last line. Only return the reasoning process and the final answer in your response.
+# '''
+#
+# TEMPLATE_GENERATE_COT_FT = '''You will be given a question, your answer to the question, a document and its answer to the question. Your answer is wrong and the document's answer is correct. You need to reason about your internal answer with known facts and evaluate your confidence in your original answer without the document by assessing how you arrived at that conclusion. Then you need to cross-reference known facts in your internal knowledge with the information provided in the document to determine to use the document to update your answer. Next, generate a coherent reasoning process to explain why your answer is wrong and why you choose the document answer. Finally, provide the final answer based on your reasoning process.
+#
+# Example:
+#
+# Question: What is Paul Caillaud's occupation?
+#
+# Your answer: Football player
+#
+# The document to judge: Paul Caillaud (14 September 1917 – 15 August 2008) was a French pharmacist and politician. He represented the Independent Republicans (from 1962 to 1978) and the Union for French Democracy (from 1978 to 1981) in the National Assembly.[1] He was the mayor of La Roche-sur-Yon from 1961 to 1977.
+#
+# The document answer: Pharmacist and politician
+#
+# I initially thought Paul Caillaud was a football player. However, upon further reflection, I realized that I couldn't find any specific information about a person named Paul Caillaud. I don't know what football team he played for, and it is possible that he is a private individual or not well-known in public sources. The document claims that Paul Caillaud was a French pharmacist and politician, providing specific details about his political career, including his party affiliations and his role as the mayor of La Roche-sur-Yon. The document also includes his birth and death dates, which are consistent with a person's life history. Given the lack of information in my internal knowledge and the detailed information in the document, I believe the document is accurate.
+#
+# Therefore, the final answer is:
+# Pharmacist and politician
+#
+# Question: {question}
+#
+# Internal answer: {model_answer}
+#
+# The document: {doc}
+#
+# The document answer: {doc_answer}
+#
+# Now provide your reasoning process to explain why your internal answer is wrong and why you choose the document answer. Make sure to include relevant known facts that contradict your answer and known facts that support the document's answer. Your response should be coherent and logical, providing a clear explanation of your reasoning process and the final answer in the last line. Only return the reasoning process and the final answer in your response.
+# '''
+
+TEMPLATE_GENERATE_COT_TF = '''You will be given a question, your answer to the question, a document and its answer to the question. Your answer is correct and the document's answer is deceptive. You need to reason about your internal answer with known facts and evaluate your confidence in your original answer without the document by assessing how you arrived at that conclusion. Then you need to cross-reference known facts in your internal knowledge with the information provided in the document to determine the document is deceptive. Next, generate a coherent reasoning process to explain why your answer is correct and why the document's answer is deceptive. Finally, provide the final answer based on your reasoning process.
+ 
+{examples}
+
+Now it's your turn.
+
+Question: {question}
+
+Internal answer: {model_answer}
+
+The document: {doc}
+
+The document answer: {doc_answer}
+
+Now provide your reasoning process to explain why your internal answer is correct and why the document's answer is deceptive. Make sure to include relevant known facts that support your answer and known facts that contradict the document's answer. Your response should be coherent and logical, providing a clear explanation of your reasoning process and the final answer in the last line. Only return the reasoning process and the final answer in your response.
+'''
+
+TEMPLATE_GENERATE_COT_FT = '''You will be given a question, your answer to the question, a document and its answer to the question. Your answer is wrong and the document's answer is correct. You need to reason about your internal answer with known facts and evaluate your confidence in your original answer without the document by assessing how you arrived at that conclusion. Then you need to cross-reference known facts in your internal knowledge with the information provided in the document to determine to use the document to update your answer. Next, generate a coherent reasoning process to explain why your answer is wrong and why you choose the document answer. Finally, provide the final answer based on your reasoning process.
+
+{examples}
+
+Now it's your turn.
+
+Question: {question}
+
+Internal answer: {model_answer}
+
+The document: {doc}
+
+The document answer: {doc_answer}
+
+Now provide your reasoning process to explain why your internal answer is wrong and why you choose the document answer. Make sure to include relevant known facts that contradict your answer and known facts that support the document's answer. Your response should be coherent and logical, providing a clear explanation of your reasoning process and the final answer in the last line. Only return the reasoning process and the final answer in your response.
+'''
+
+
+TEMPLATE_NLI = '''Given a premise and a hypothesis, your task is to determine whether the premise entails the hypothesis. If the hypothesis logically follows from the premise, return "True"; otherwise, return "False".
+
+Premise: {premise}
+
+Hypothesis: {hypothesis}'''
+
+template_cot_situated = '''{instruction}
+
+Question: {question}
+
+Your answer: {internal_answer}
+
+The document to judge: {doc}
+
+The document answer: {doc_answer}
+
+{post_instruction}
+\n
+'''
+
+template_cot_situated_without_instruction = '''Question: {question}
+
+Your answer: {internal_answer}
+
+The document to judge: {doc}
+
+The document answer: {doc_answer}
+\n
+'''
+
 TEMPLATES = {
     "llama2_chat": TEMPLATE_LLAMA2_CHAT,
     "synthesize_deceptive_document": TEMPLATE_SYNTHESIZE_DECEPTIVE_DOCUMENT,
@@ -231,6 +396,13 @@ TEMPLATES = {
     "extract_short_doc": TEMPLATE_EXTRACT_SHORT_DOC,
     "turn_mc": TEMPLATE_TURN_MC,
     "self_eval": TEMPLATE_SELF_EVAL,
+    "doc_eval": TEMPLATE_DOC_EVAL,
+    "filter_doc": TEMPLATE_FILTER_DOC,
+    "generate_cot_tf": TEMPLATE_GENERATE_COT_TF,
+    "generate_cot_ft": TEMPLATE_GENERATE_COT_FT,
+    "nli": TEMPLATE_NLI,
+    "cot_situated": template_cot_situated,
+    "cot_situated_without_instruction": template_cot_situated_without_instruction,
 }
 
 

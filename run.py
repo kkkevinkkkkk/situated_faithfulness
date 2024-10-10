@@ -7,7 +7,7 @@ import json
 import numpy as np
 
 from pipeline import (MyPipeline, pipeline_init, RestrictTokensLogitsProcessor, MC2Pipeline,
-                      HybridSituatedFaithfulQAPipeline)
+                      HybridSituatedFaithfulQAPipeline, CoTSituatedFaithfulQAPipeline)
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
@@ -16,6 +16,7 @@ from prompter import Prompter
 from utils import read_jsonl, save_jsonl, extract_source_reliability, OPENAI_MODELS
 from datasets import Dataset
 from eval import Evaluator
+import pandas as pd
 
 import sys
 import logging
@@ -41,8 +42,10 @@ def main(
     confidence_method = args.get("confidence_method", "")
     confidence_to_pipeline = {
         "": MyPipeline,
-        "hybrid_situated": HybridSituatedFaithfulQAPipeline,
-        "mc2": MC2Pipeline,
+        "cot_situated": CoTSituatedFaithfulQAPipeline,
+        # "hybrid_situated": HybridSituatedFaithfulQAPipeline,
+        # "mc2": MC2Pipeline,
+        # "cot_situated-1": CoTSituatedFaithfulQAPipeline,
     }
 
     num_return_sequences = args.get("num_return_sequences", 1)
@@ -68,11 +71,23 @@ def main(
     source_reliability_prompt_idx = args.get("source_reliability_prompt_idx", None)
 
     if args.sample_size > 0:
-        if args.get("sample_start", None) is not None:
-            eval_data = eval_data[args.sample_start: args.sample_start + args.sample_size]
-            print(f"sample from {args.sample_start} to {args.sample_start + args.sample_size}")
+        sample_start = args.get("sample_start", 0)
+        if "is_doc_correct" not in eval_data.columns:
+            eval_data = eval_data[sample_start: sample_start + args.sample_size]
+            print(f"sample from {sample_start} to {sample_start + args.sample_size}")
         else:
-            eval_data = eval_data[:args.sample_size]
+            half_sample_size = args.sample_size // 2
+            eval_data_correct_doc = eval_data[eval_data["is_doc_correct"] == 1].reset_index(drop=True)[sample_start: sample_start + half_sample_size]
+            eval_data_incorrect_doc = eval_data[eval_data["is_doc_correct"] == 0].reset_index(drop=True)[sample_start: sample_start + half_sample_size]
+            assert all(eval_data_correct_doc["question"] == eval_data_incorrect_doc["question"])
+            if "__index_level_0__" in eval_data_correct_doc.columns:
+                eval_data_correct_doc.drop(columns=[ "__index_level_0__"], inplace=True)
+            if "__index_level_0__" in eval_data_incorrect_doc.columns:
+                eval_data_incorrect_doc.drop(columns=[ "__index_level_0__"], inplace=True)
+            eval_data = pd.concat([eval_data_correct_doc, eval_data_incorrect_doc])
+            print(len(eval_data))
+            print(f"sample from {sample_start} to {sample_start + half_sample_size} with correct doc and incorrect doc")
+
     else:
         args.sample_size = len(eval_data)
 
@@ -97,6 +112,7 @@ def main(
                 confidence_score = internal_predictions["confidence_score"][idx]
             # round up to the nearest 0.1
             eval_item["model_internal_confidence"] = str(round(confidence_score * 10) * 10)
+            eval_item["internal_correctness_score"] = internal_predictions["correctness_score"][idx]
 
     max_new_tokens = args.get("max_new_tokens", 512)
     prompter_task_type = args.get("task_type", "main")

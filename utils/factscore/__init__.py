@@ -1,1 +1,0 @@
-from .atomic_facts import AtomicFactGenerator

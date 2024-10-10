@@ -154,6 +154,15 @@ class MyPipeline(TextGenerationPipeline):
         input_ids = model_outputs["input_ids"]
         prompt_text = model_outputs["prompt_text"]
         scores = model_outputs["scores"]
+        log_probs = [[score.item()
+                              for score, token in zip(scores[i], generated_sequence[i][-len(scores[i]):])] for i in
+                             range(len(scores))]
+        tokens = [[self.tokenizer.decode(token)
+                              for score, token in zip(scores[i], generated_sequence[i][-len(scores[i]):])] for i in
+                             range(len(scores))]
+        # tokens_log_probs = [[(self.tokenizer.decode(token), score.item())
+        #                       for score, token in zip(scores[i], generated_sequence[i][-len(scores[i]):])] for i in
+        #                      range(len(scores))]
         tokens_probs_list = [[(self.tokenizer.decode(token), torch.exp(score).item())
                               for score, token in zip(scores[i], generated_sequence[i][-len(scores[i]):])] for i in
                              range(len(scores))]
@@ -195,7 +204,7 @@ class MyPipeline(TextGenerationPipeline):
                 # record = {"generated_text": all_text, "tokens_probs": tokens_probs_list[i],
                 #           "seq_log_prob": seq_log_probs[i].item(), "full_text": full_text}
                 record = {"generated_text": all_text, "seq_log_prob": seq_log_probs[i].item(), "full_text": full_text,
-                          "output": all_text}
+                          "output": all_text, "tokens": tokens[i], "log_probs": log_probs[i]}
                 log_probs = self.post_process_cal_logprob(tokens_probs_list[i])
                 record.update(log_probs)
                 record = Record(**record)
@@ -211,12 +220,17 @@ class MyPipeline(TextGenerationPipeline):
         response = openai.ChatCompletion.create(
             model=model_name,
             messages=messages,
-            temperature=temperature, )
+            temperature=temperature,
+            logprobs=True,
+        )
         output = response.choices[0].message["content"]
-
+        seq_log_prob = np.sum([token_info["logprob"] for token_info in response.choices[0].logprobs.content])
+        tokens_log_prob = [(token_info["token"], token_info["logprob"]) for token_info in response.choices[0].logprobs.content]
+        tokens = [token_info["token"] for token_info in response.choices[0].logprobs.content]
+        log_probs = [token_info["logprob"] for token_info in response.choices[0].logprobs.content]
         record = Record(**{"generated_text": output,
-                           "seq_log_prob": 0, "full_text": prompt + "\n" + output,
-                           "output": output})
+                           "seq_log_prob": seq_log_prob, "full_text": prompt + "\n" + output,
+                           "output": output, "tokens": tokens, "log_probs": log_probs})
         records = [record]
         return records
 
@@ -345,8 +359,8 @@ class HybridSituatedFaithfulQAPipeline(MyPipeline):
             evidence_answer = outputs[0]["generated_text"]
 
             instruction = "You will be given a multiple-choice question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer."
-            if prompter.dataset_name == "freshqa":
-                instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
+            # if prompter.dataset_name == "freshqa":
+            #     instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
             TEMPLATE_MULTIPLE_CHOICE = '''{instruction}
 
 Question: {question}
@@ -395,62 +409,8 @@ class MC2Pipeline(MyPipeline):
             evidence_answer = eval_item["model_doc_answer"]
 
             instruction = "You will be given a multiple-choice question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer."
-            if prompter.dataset_name == "freshqa":
-                instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
-            TEMPLATE_MULTIPLE_CHOICE = '''{instruction}
-
-    Question: {question}
-
-    Choices:
-    {choices}
-
-    Document: {document}
-
-
-    Return your answer in the following format:
-    choice letter) answer1'''
-
-            choices = f"A) {model_answer}\nB) {evidence_answer}\n"
-            # choices = f"A) {evidence_answer}\nB) {model_answer}\n"
-            input_prompt = TEMPLATE_MULTIPLE_CHOICE.format(
-                question=eval_item["question"],
-                document=eval_item["docs"][0]["text"],
-                choices=choices,
-                instruction=instruction
-            )
-            messages = [{"input": input_prompt}]
-            input_prompt = prompter.process_messages(messages)
-
-            outputs = self.call_once(input_prompt, *args, temperature=temperature,
-                                     num_workers=num_workers, batch_size=batch_size,
-                                     num_return_sequences=1, random_state=random_state + i, **kwargs)
-            final_answer = outputs[0]["generated_text"]
-            final_answer = re.sub(r"[A-Z]\)", "", final_answer).strip()
-            outputs[0]['generated_text'] = final_answer
-            outputs[0]['output'] = final_answer
-            outputs[0]['internal_answer'] = model_answer
-            outputs[0]['model_doc_answer'] = evidence_answer
-            # outputs[0]['generated_text'] = evidence_answer
-            # outputs[0]['output'] = evidence_answer
-            sequences.append(outputs[0])
-
-        return sequences
-
-class HybridCoTSituatedFaithfulQAPipeline(MyPipeline):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def __call__(self, inputs, *args, eval_item=None, prompter=None, temperature=0.6,
-                 num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
-        sequences = []
-        for i in range(num_return_sequences):
-            model_answer = eval_item["internal_answer"]
-            evidence_answer = eval_item["model_doc_answer"]
-
-
-            instruction = "You will be given a multiple-choice question and a document. The document may not be trustworthy. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer."
-            if prompter.dataset_name == "freshqa":
-                instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
+            # if prompter.dataset_name == "freshqa":
+            #     instruction = f"You will be given a multiple-choice question and a document. The document may not be trustworthy and the question might be based on false premises. Use your judgment to assess the reliability of the document. Then, based on both your assessment and your own knowledge, provide the best possible answer as the date of {CURRENT_DATE}."
             TEMPLATE_MULTIPLE_CHOICE = '''{instruction}
 
 Question: {question}
@@ -461,31 +421,73 @@ Choices:
 Document: {document}
 
 
-Return your answer in the following format:
-choice letter) answer1'''
+Make sure the final answer is at the last line of your response. Return your answer in the following format:
+choice letter) answer1
+'''
+
+            is_multiple_choice = False
+            pattern = r"^(A\)|B\)|C\)|D\))\s*(.*)"
+
+            match = re.match(pattern, model_answer)
+
+            is_multiple_choice = True if match else False
+
 
             choices = f"A) {model_answer}\nB) {evidence_answer}\n"
+            if is_multiple_choice:
+                choices = f"{model_answer}\n{evidence_answer}\n"
             # choices = f"A) {evidence_answer}\nB) {model_answer}\n"
-            input_prompt = TEMPLATE_MULTIPLE_CHOICE.format(
+            text_input = TEMPLATE_MULTIPLE_CHOICE.format(
                 question=eval_item["question"],
                 document=eval_item["docs"][0]["text"],
                 choices=choices,
                 instruction=instruction
             )
-            messages = [{"input": input_prompt}]
+            messages = [{"input": text_input}]
             input_prompt = prompter.process_messages(messages)
 
             outputs = self.call_once(input_prompt, *args, temperature=temperature,
-                                           num_workers=num_workers, batch_size=batch_size,
-                                           num_return_sequences=1, random_state=random_state + i, **kwargs)
-            final_answer = outputs[0]["generated_text"]
-            final_answer = re.sub(r"[A-Z]\)", "", final_answer).strip()
+                                     num_workers=num_workers, batch_size=batch_size,
+                                     num_return_sequences=1, random_state=random_state + i, **kwargs)
+            output = outputs[0]["generated_text"]
+            final_answer = output.split("\n")[-1].strip()
+            if not is_multiple_choice:
+                final_answer = re.sub(r"[A-Z]\)", "", final_answer).strip()
+            outputs[0]["text_input"] = text_input
             outputs[0]['generated_text'] = final_answer
             outputs[0]['output'] = final_answer
+            outputs[0]['full_output'] = output
             outputs[0]['internal_answer'] = model_answer
             outputs[0]['model_doc_answer'] = evidence_answer
             # outputs[0]['generated_text'] = evidence_answer
             # outputs[0]['output'] = evidence_answer
+            sequences.append(outputs[0])
+
+        return sequences
+
+class CoTSituatedFaithfulQAPipeline(MyPipeline):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, inputs, *args, eval_item=None, prompter=None, temperature=0.6,
+                 num_workers=None, batch_size=None, num_return_sequences=1, random_state=1, **kwargs):
+        sequences = []
+        for i in range(num_return_sequences):
+            model_answer = eval_item["internal_answer"]
+            evidence_answer = eval_item["model_doc_answer"]
+
+            outputs = self.call_once(inputs, *args, temperature=temperature,
+                                        num_workers=num_workers, batch_size=batch_size,
+                                        num_return_sequences=1, random_state=random_state + i, **kwargs)
+            final_answer = outputs[0]["generated_text"]
+            outputs[0]['full_cot'] = final_answer
+            final_answer = final_answer.split("\n")[-1].strip()
+
+            outputs[0]['generated_text'] = final_answer
+            outputs[0]['output'] = final_answer
+            outputs[0]['internal_answer'] = model_answer
+            outputs[0]['model_doc_answer'] = evidence_answer
+
             sequences.append(outputs[0])
 
         return sequences

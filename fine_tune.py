@@ -104,7 +104,7 @@ def main(
         save_steps=conf.save_steps,
         learning_rate=conf.learning_rate,
         per_device_train_batch_size=conf.per_device_train_batch_size,
-        per_device_eval_batch_size=16,
+        per_device_eval_batch_size=8,
         num_train_epochs=conf.num_train_epochs,
         seed=conf.seed,
         load_best_model_at_end=True,
