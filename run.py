@@ -6,8 +6,7 @@ import os
 import json
 import numpy as np
 
-from pipeline import (MyPipeline, pipeline_init, RestrictTokensLogitsProcessor, MC2Pipeline,
-                      HybridSituatedFaithfulQAPipeline, CoTSituatedFaithfulQAPipeline)
+from pipeline import (MyPipeline, pipeline_init, RestrictTokensLogitsProcessor, CoTSituatedFaithfulQAPipeline)
 from transformers import AutoTokenizer
 from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
@@ -18,8 +17,6 @@ from datasets import Dataset
 from eval import Evaluator
 import pandas as pd
 
-import sys
-import logging
 
 
 def main(
@@ -43,9 +40,6 @@ def main(
     confidence_to_pipeline = {
         "": MyPipeline,
         "cot_situated": CoTSituatedFaithfulQAPipeline,
-        # "hybrid_situated": HybridSituatedFaithfulQAPipeline,
-        # "mc2": MC2Pipeline,
-        # "cot_situated-1": CoTSituatedFaithfulQAPipeline,
     }
 
     num_return_sequences = args.get("num_return_sequences", 1)
@@ -70,11 +64,13 @@ def main(
     source_reliability_rate = extract_source_reliability(args.eval_file)
     source_reliability_prompt_idx = args.get("source_reliability_prompt_idx", None)
 
+    # sample part of the data
     if args.sample_size > 0:
         sample_start = args.get("sample_start", 0)
         if "is_doc_correct" not in eval_data.columns:
             eval_data = eval_data[sample_start: sample_start + args.sample_size]
             print(f"sample from {sample_start} to {sample_start + args.sample_size}")
+        # if the data include both correct and incorrect doc, we sample the same portion of correct and incorrect doc
         else:
             half_sample_size = args.sample_size // 2
             eval_data_correct_doc = eval_data[eval_data["is_doc_correct"] == 1].reset_index(drop=True)[sample_start: sample_start + half_sample_size]
