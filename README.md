@@ -21,6 +21,11 @@ git clone hhttps://github.com/kkkevinkkkkk/situated_faithfulness.git
 cd situated_faithfulness
 pip install -r requirements.txt
 ```
+If you want to run openai models, you need set the environment variable `OPENAI_API_KEY` to your openai api key.
+
+```sh
+export OPENAI_API_KEY=your_openai_api_key
+```
 
 ## Data
 Situated Faithfulness benchmark includes RedditQA, TriviaQA, FreshQA, NaturalQA, ConflictQA(Only include PopQA), ClashEval. 
