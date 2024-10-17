@@ -1,0 +1,16 @@
+version: implicit_self_guided_confidence_reasoning
+seed: 1
+exp_name: implicit_scr
+model: gpt-4o-mini # meta-llama/Meta-Llama-3-8B-Instruct
+confidence_method: ''
+faithful_type: situated
+dataset_name: triviaqa
+eval_file: ./data/triviaqa/test_context.jsonl
+save_dir: ./
+sample_size: 600
+num_return_sequences: 1
+do_eval: true
+n_shot: 3
+n_doc: 1
+no_doc_in_demo: false
+multi_process: True

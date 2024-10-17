@@ -1,0 +1,25 @@
+# extract confidence score
+version: explicit_self_guided_confidence_reasoning
+
+seed: 1
+
+exp_name: explicit_scr
+model: gpt-4o-mini
+
+
+confidence_method: "cot_situated"
+task_type: "cot_situated"
+
+dataset_name: triviaqa
+eval_file: ./data/triviaqa/test_context_gpt-4o-mini.jsonl
+save_dir: ./
+sample_size: 600
+num_return_sequences: 1
+multi_process: True
+do_eval: True
+
+n_shot: 3
+n_doc: 1
+no_doc_in_demo: False
+
+

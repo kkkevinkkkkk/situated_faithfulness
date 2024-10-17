@@ -1,0 +1,14 @@
+version: closed_book
+seed: 1
+exp_name: closed_book
+model: gpt-4o-mini # meta-llama/Meta-Llama-3-8B-Instruct
+confidence_method: ''
+dataset_name: triviaqa
+eval_file: ./data/triviaqa/test.jsonl
+save_dir: ./
+sample_size: 300
+num_return_sequences: 1
+do_eval: true
+n_shot: 3
+n_doc: 0
+multi_process: True

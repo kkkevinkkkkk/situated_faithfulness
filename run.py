@@ -12,7 +12,7 @@ from peft import AutoPeftModelForCausalLM
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from prompter import Prompter
-from utils import read_jsonl, save_jsonl, extract_source_reliability, OPENAI_MODELS
+from utils import read_jsonl, save_jsonl, OPENAI_MODELS, multi_process_map
 from datasets import Dataset
 from eval import Evaluator
 import pandas as pd
@@ -61,8 +61,6 @@ def main(
 
     # Load data
     eval_data = read_jsonl(args.eval_file)
-    source_reliability_rate = extract_source_reliability(args.eval_file)
-    source_reliability_prompt_idx = args.get("source_reliability_prompt_idx", None)
 
     # sample part of the data
     if args.sample_size > 0:
@@ -97,18 +95,6 @@ def main(
         demo_prompt_idx=args.get("demo_prompt_idx", None),
     )
 
-    internal_prediction_f = args.get("internal_prediction_file", None)
-    if internal_prediction_f is not None:
-        internal_predictions = read_jsonl(internal_prediction_f)
-        for idx, eval_item in enumerate(eval_data):
-            eval_item["model_internal_answer"] = internal_predictions["model_answer"][idx]
-            if args.exp_name.endswith("oracle"):
-                confidence_score = internal_predictions["scores"][idx]['em_relax']
-            else:
-                confidence_score = internal_predictions["confidence_score"][idx]
-            # round up to the nearest 0.1
-            eval_item["model_internal_confidence"] = str(round(confidence_score * 10) * 10)
-            eval_item["internal_correctness_score"] = internal_predictions["correctness_score"][idx]
 
     max_new_tokens = args.get("max_new_tokens", 512)
     prompter_task_type = args.get("task_type", "main")
@@ -122,7 +108,7 @@ def main(
 
 
     temperature = args.get("temperature", 0.6)
-    # idx = 0
+
     def get_model_answer(eval_item):
         # turn df to dict if needed
         if isinstance(eval_item, pd.Series):
@@ -131,7 +117,6 @@ def main(
                                                    eval_item=eval_item,
                                                    faithful_type=args.get("faithful_type", None),)
 
-        # eval_data[idx]['text_input'] = text_input
         eval_item['text_input'] = text_input
 
         # if idx == 0:
@@ -164,18 +149,14 @@ def main(
         return eval_item
 
 
+    # run the model for inference, for gpt model, we can use multi-process to speed up
     if args.get("multi_process", False):
-        eval_dataset = Dataset.from_pandas(eval_data)
-        eval_dataset = eval_dataset.map(lambda row: get_model_answer(row), num_proc=100)
-        eval_data = pd.DataFrame(eval_dataset)
-
+        eval_data = multi_process_map(eval_data, get_model_answer, num_proc=64)
     else:
         eval_data_output = []
-        # for idx, eval_item in tqdm(enumerate(eval_data)):
         for idx, eval_item in tqdm(eval_data.iterrows()):
             eval_data_output.append(get_model_answer(eval_item))
         eval_data = pd.DataFrame(eval_data_output)
-
 
 
 
@@ -189,16 +170,15 @@ def main(
 
     sample_suffix = f"_{args.sample_start}:{args.sample_start + args.sample_size}" \
         if args.get("sample_start", None) is not None else f"_{args.sample_size}"
-    source_reliability_suffix = f"_sr:{source_reliability_rate}" if source_reliability_rate is not None else ""
-    source_reliability_suffix += f"_srp:{source_reliability_prompt_idx}" \
-        if source_reliability_prompt_idx is not None else ""
     n_shot_suffix = f"_{args.n_shot}-shot"
     temperature_suffix = f"_t:{temperature}" if temperature != 0.6 else ""
-    save_path = save_path + n_shot_suffix + temperature_suffix + source_reliability_suffix + sample_suffix + ".jsonl"
+    save_path = save_path + n_shot_suffix + temperature_suffix + sample_suffix + ".jsonl"
     if args.get("save_path", None) is not None:
         save_path = args.save_path
 
     save_jsonl(eval_data, save_path)
+
+    # evaluate the model if needed
     if args.get("do_eval", True):
         prediction_file = save_path
         evaluator = Evaluator(prediction_file)
