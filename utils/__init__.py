@@ -5,7 +5,6 @@ from .retriever import Retriever
 from .nli import NLIModel
 from .ner import NERModel
 from .dataset_utils import f1_score_token_level, recall_score_token_level, multi_process_map
-from .factscore import AtomicFactGenerator
 from .analysis_utils import calculate_ece_score
 
 from .sft_dataset_utils import make_supervised_data_module
