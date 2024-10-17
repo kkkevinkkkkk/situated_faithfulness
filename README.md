@@ -28,7 +28,7 @@ Situated Faithfulness benchmark includes RedditQA, TriviaQA, FreshQA, NaturalQA,
 The Evaluation data is available on [huggingface](https://huggingface.co/datasets/kkkevinkkk/SituatedFaithfulnessEval). 
 Each dataset includes columns: `question`, `answers`(a list of reference answers), `correct_doc`, `wrong_doc`, `correct_answer`(the answer from the correct document), `wrong_answer`(the answer from the wrong document), and other dataset specific columns. Each dataset has a test split and a dev split.
 
-You could download the data using the jupyter notebook [download_dataset.ipynb](download_dataset.ipynb)
+You could download the data using the jupyter notebook [notebooks/datasets_download.ipynb](notebooks/datasets_download.ipynb)
 
 The training data for CR-DPO could be downloaded [here](https://huggingface.co/datasets/kkkevinkkk/SituatedFaithfulnessSupplement).
 
