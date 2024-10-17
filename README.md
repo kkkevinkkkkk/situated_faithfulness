@@ -24,10 +24,14 @@ pip install -r requirements.txt
 
 ## Data
 Situated Faithfulness benchmark includes RedditQA, TriviaQA, FreshQA, NaturalQA, ConflictQA(Only include PopQA), ClashEval. 
-The Evaluation data is available on [huggingface](https://huggingface.co/datasets/kkkevinkkk/SituatedFaithfulnessEval). The training data for CR-DPO could be downloaded [here](https://huggingface.co/datasets/kkkevinkkk/SituatedFaithfulnessSupplement).
+
+The Evaluation data is available on [huggingface](https://huggingface.co/datasets/kkkevinkkk/SituatedFaithfulnessEval). 
 Each dataset includes columns: `question`, `answers`(a list of reference answers), `correct_doc`, `wrong_doc`, `correct_answer`(the answer from the correct document), `wrong_answer`(the answer from the wrong document), and other dataset specific columns. Each dataset has a test split and a dev split.
 
 You could download the data using the jupyter notebook [download_dataset.ipynb](download_dataset.ipynb)
+
+The training data for CR-DPO could be downloaded [here](https://huggingface.co/datasets/kkkevinkkk/SituatedFaithfulnessSupplement).
+
 
 
 
@@ -50,6 +54,7 @@ You could change the task by changing the `dataset_name` and `eval_file` in the 
 Supported tasks are `redditqa`, `triviaqa`, `freshqa`, `naturalqa`, `conflictqa` (popqa), `clash_eval`.
 Models can be changed by modify the `model` in the configure file.  (`gpt-4o`, `gpt-4o-mini`, `gpt-3.5-turbo`, `meta-llama/Meta-Llama-3-8B-Instruct`)
 > Note: when changing the model to llama3, the `multi_process` need to be set to False.
+
 
 
 
